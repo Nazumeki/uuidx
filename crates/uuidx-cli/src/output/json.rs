@@ -292,3 +292,139 @@ fn warnings_for(inspection: &UuidInspection) -> Vec<String> {
         _ => Vec::new(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use uuidx_core::{UuidInspection, inspect_uuid, parse_uuid};
+
+    fn inspection(input: &str) -> UuidInspection {
+        let uuid = parse_uuid(input).expect("test UUID should parse");
+        inspect_uuid(&uuid)
+    }
+
+    fn versioned_uuid(version: u8) -> Uuid {
+        let mut bytes = [0x11; 16];
+        bytes[6] = (bytes[6] & 0x0f) | (version << 4);
+        bytes[8] = (bytes[8] & 0x3f) | 0x80;
+        Uuid::from_bytes(bytes)
+    }
+
+    #[test]
+    fn constructors_serialize_their_operation_contracts() {
+        let uuid = parse_uuid("018f2c0b-6c5b-7d2e-8f4a-123456789abc").unwrap();
+        let generated = JsonRecord::generated(
+            2,
+            &uuid,
+            "018f2c0b-6c5b-7d2e-8f4a-123456789abc",
+            "v7",
+            UuidOutputFormat::Canonical,
+            &["warning".to_owned()],
+        );
+        let generated_json = serde_json::to_value(generated).unwrap();
+        assert_eq!(generated_json["operation"], "generate");
+        assert_eq!(generated_json["index"], 2);
+        assert_eq!(generated_json["ok"], true);
+        assert_eq!(generated_json["kind"], "uuid");
+        assert_eq!(generated_json["format"], "canonical");
+        assert_eq!(generated_json["warnings"][0], "warning");
+
+        let v5 = parse_uuid("11111111-1111-5111-9111-111111111111").unwrap();
+        let converted = JsonRecord::converted(
+            3,
+            "11111111111151119111111111111111",
+            &v5,
+            "urn:uuid:11111111-1111-5111-9111-111111111111",
+            UuidOutputFormat::Urn,
+        );
+        let converted_json = serde_json::to_value(converted).unwrap();
+        assert_eq!(converted_json["operation"], "convert");
+        assert_eq!(converted_json["version"], "v5");
+        assert_eq!(
+            converted_json["warnings"][0],
+            "UUID v5 uses legacy SHA-1 name hashing"
+        );
+
+        let v4 = parse_uuid("11111111-1111-4111-9111-111111111111").unwrap();
+        let converted = JsonRecord::converted(4, "input", &v4, "output", UuidOutputFormat::Simple);
+        assert!(serde_json::to_value(converted).unwrap()["warnings"].is_null());
+
+        let validated = JsonRecord::validated(5, "input", &uuid);
+        let validated_json = serde_json::to_value(validated).unwrap();
+        assert_eq!(validated_json["operation"], "validate");
+        assert_eq!(validated_json["format"], serde_json::Value::Null);
+
+        let error = JsonRecord::error("inspect", 6, "bad", "invalid_identifier", "invalid");
+        let error_json = serde_json::to_value(error).unwrap();
+        assert_eq!(error_json["ok"], false);
+        assert_eq!(error_json["error"]["code"], "invalid_identifier");
+        assert_eq!(error_json["value"], serde_json::Value::Null);
+    }
+
+    #[test]
+    fn uuid_inspection_serializes_all_metadata_families_and_redaction() {
+        for (input, metadata_type) in [
+            ("11111111-1111-1111-9111-111111111111", "time"),
+            ("11111111-1111-2111-9111-111111111111", "dce_security"),
+            ("11111111-1111-3111-9111-111111111111", "name_based"),
+            ("11111111-1111-4111-9111-111111111111", "random"),
+            ("11111111-1111-5111-9111-111111111111", "name_based"),
+            ("11111111-1111-6111-9111-111111111111", "time"),
+            ("11111111-1111-7111-9111-111111111111", "time"),
+            ("11111111-1111-8111-9111-111111111111", "custom"),
+        ] {
+            let record = JsonRecord::uuid_inspection(0, input, &inspection(input), false);
+            let json = serde_json::to_value(record).unwrap();
+            assert_eq!(json["metadata"]["type"], metadata_type, "input: {input}");
+            assert!(json["fields"].is_array());
+        }
+
+        let v6 = versioned_uuid(6);
+        let v6_inspection = inspect_uuid(&v6);
+        let unredacted = serde_json::to_value(JsonRecord::uuid_inspection(
+            0,
+            &v6.to_string(),
+            &v6_inspection,
+            false,
+        ))
+        .unwrap();
+        assert!(unredacted["metadata"]["node_id"].is_string());
+
+        let redacted = serde_json::to_value(JsonRecord::uuid_inspection(
+            0,
+            &v6.to_string(),
+            &v6_inspection,
+            true,
+        ))
+        .unwrap();
+        assert!(redacted["metadata"]["node_id"].is_null());
+
+        for uuid in [
+            Uuid::from_bytes([0; 16]),
+            Uuid::from_bytes([0xff; 16]),
+            versioned_uuid(9),
+        ] {
+            let inspection = inspect_uuid(&uuid);
+            let json = serde_json::to_value(JsonRecord::uuid_inspection(
+                0,
+                &uuid.to_string(),
+                &inspection,
+                false,
+            ))
+            .unwrap();
+            assert_eq!(json["metadata"]["type"], "none");
+        }
+    }
+
+    #[cfg(feature = "ulid-inspect")]
+    #[test]
+    fn ulid_inspection_serializes_inspection_only_metadata() {
+        let inspection = uuidx_core::inspect_ulid("01ARZ3NDEKTSV4RRFFQ69G5FAV").unwrap();
+        let record = JsonRecord::ulid_inspection(1, &inspection.normalized, &inspection);
+        let json = serde_json::to_value(record).unwrap();
+        assert_eq!(json["kind"], "ulid");
+        assert_eq!(json["metadata"]["type"], "ulid");
+        assert_eq!(json["warnings"][0], "ULID support is inspection-only");
+        assert!(json["version"].is_null());
+    }
+}

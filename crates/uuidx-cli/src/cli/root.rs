@@ -123,3 +123,36 @@ fn file_path(value: &str) -> Result<PathBuf, String> {
     }
     Ok(PathBuf::from(value))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cli::UuidFormatArg;
+
+    #[test]
+    fn parser_preserves_aliases_and_generation_defaults() {
+        let cli = Cli::try_parse_from(["uuidx", "g"]).expect("alias should parse");
+        assert_eq!(cli.global.output, OutputModeArg::Auto);
+        match cli.command {
+            Command::Generate(args) => {
+                assert_eq!(args.target, "v7");
+                assert_eq!(args.count, 1);
+            }
+            command => panic!("expected generate command, got {command:?}"),
+        }
+
+        let cli = Cli::try_parse_from(["uuidx", "convert", "-o", "json", "--to", "urn"])
+            .expect("global and command options should parse");
+        assert_eq!(cli.global.output, OutputModeArg::Json);
+        assert!(matches!(
+            cli.command,
+            Command::Convert(args) if args.to == UuidFormatArg::Urn
+        ));
+    }
+
+    #[test]
+    fn file_path_rejects_stdin_sentinel_and_keeps_paths() {
+        assert_eq!(file_path("values.uuid"), Ok(PathBuf::from("values.uuid")));
+        assert!(file_path("-").is_err());
+    }
+}

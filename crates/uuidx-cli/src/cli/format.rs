@@ -22,3 +22,28 @@ impl From<UuidFormatArg> for UuidOutputFormat {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn format_arguments_map_to_core_formats() {
+        assert_eq!(
+            UuidOutputFormat::from(UuidFormatArg::Canonical),
+            UuidOutputFormat::Canonical
+        );
+        assert_eq!(
+            UuidOutputFormat::from(UuidFormatArg::Simple),
+            UuidOutputFormat::Simple
+        );
+        assert_eq!(
+            UuidOutputFormat::from(UuidFormatArg::Urn),
+            UuidOutputFormat::Urn
+        );
+        assert_eq!(
+            UuidOutputFormat::from(UuidFormatArg::Braced),
+            UuidOutputFormat::Braced
+        );
+    }
+}

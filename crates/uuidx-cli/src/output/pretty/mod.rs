@@ -110,6 +110,7 @@ fn inspection_warning(inspection: &UuidInspection) -> Option<&'static str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use uuidx_core::{inspect_uuid, parse_uuid};
 
     #[test]
     fn generated_uses_distinct_index_version_and_value_colors() {
@@ -118,5 +119,55 @@ mod tests {
         assert!(output.contains("\u{1b}[36m#0\u{1b}[0m"));
         assert!(output.contains("\u{1b}[1m\u{1b}[32mv7\u{1b}[0m"));
         assert!(output.contains("\u{1b}[1m\u{1b}[92m019febdd"));
+    }
+
+    #[test]
+    fn renderers_cover_warnings_and_command_specific_sections() {
+        let warning = vec!["application warning".to_owned()];
+        let generated_output = generated(3, "value", "v8", &warning);
+        assert!(generated_output.contains("#3"));
+        assert!(generated_output.contains("application warning"));
+
+        for (input, expected_warning) in [
+            (
+                "11111111-1111-1111-9111-111111111111",
+                "UUID v1 exposes timestamp",
+            ),
+            (
+                "11111111-1111-2111-9111-111111111111",
+                "UUID v2 DCE Security",
+            ),
+            (
+                "11111111-1111-3111-9111-111111111111",
+                "UUID v3 uses legacy MD5",
+            ),
+            (
+                "11111111-1111-5111-9111-111111111111",
+                "UUID v5 uses legacy SHA-1",
+            ),
+        ] {
+            let uuid = parse_uuid(input).unwrap();
+            let inspected = inspect_uuid(&uuid);
+            let output = inspection(0, input, &inspected, false, false);
+            assert!(output.contains(expected_warning), "input: {input}");
+        }
+
+        let uuid = parse_uuid("018f2c0b-6c5b-7d2e-8f4a-123456789abc").unwrap();
+        let inspected = inspect_uuid(&uuid);
+        assert!(inspection(0, &uuid.to_string(), &inspected, false, true).contains("Bit layout"));
+        assert!(!inspection(0, &uuid.to_string(), &inspected, false, false).contains("Bit layout"));
+        assert!(converted(1, "input", "output", UuidOutputFormat::Urn).contains("Converted UUID"));
+        assert!(validated(2, "input", &uuid).contains("[ok]"));
+        assert!(data_error(3, "bad", "invalid").contains("[error]"));
+        assert!(top_level_error("failure").contains("error:"));
+    }
+
+    #[cfg(feature = "ulid-inspect")]
+    #[test]
+    fn ulid_renderer_marks_read_only_compatibility() {
+        let inspected = uuidx_core::inspect_ulid("01ARZ3NDEKTSV4RRFFQ69G5FAV").unwrap();
+        let output = ulid_inspection(4, &inspected.normalized, &inspected);
+        assert!(output.contains("ULID inspection #4"));
+        assert!(output.contains("inspection-only compatibility"));
     }
 }

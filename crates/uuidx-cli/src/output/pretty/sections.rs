@@ -109,3 +109,119 @@ fn input_format(input: &str) -> UuidOutputFormat {
         UuidOutputFormat::Simple
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use uuidx_core::{inspect_uuid, parse_uuid};
+
+    fn inspection(input: &str) -> UuidInspection {
+        let uuid = parse_uuid(input).expect("test UUID should parse");
+        inspect_uuid(&uuid)
+    }
+
+    #[test]
+    fn summary_renders_time_name_custom_dce_and_plain_metadata() {
+        let v7 = inspection("018f2c0b-6c5b-7d2e-8f4a-123456789abc");
+        let v7_summary = summary("018f2c0b-6c5b-7d2e-8f4a-123456789abc", &v7, false);
+        assert!(v7_summary.contains("timestamp"));
+        assert!(v7_summary.contains("unix_millis"));
+        assert!(!v7_summary.contains("node_id"));
+
+        let v6 = inspection("11111111-1111-6111-9111-111111111111");
+        let unredacted = summary("11111111-1111-6111-9111-111111111111", &v6, false);
+        assert!(unredacted.contains("clock_sequence"));
+        assert!(unredacted.contains("node_id"));
+        assert!(!unredacted.contains("[redacted]"));
+        let redacted = summary("11111111-1111-6111-9111-111111111111", &v6, true);
+        assert!(redacted.contains("[redacted]"));
+
+        assert!(
+            summary(
+                "11111111-1111-5111-9111-111111111111",
+                &inspection("11111111-1111-5111-9111-111111111111"),
+                false,
+            )
+            .contains("algorithm")
+        );
+        assert!(
+            summary(
+                "11111111-1111-8111-9111-111111111111",
+                &inspection("11111111-1111-8111-9111-111111111111"),
+                false,
+            )
+            .contains("custom_bytes")
+        );
+        assert!(
+            summary(
+                "11111111-1111-2111-9111-111111111111",
+                &inspection("11111111-1111-2111-9111-111111111111"),
+                false,
+            )
+            .contains("DCE Security")
+        );
+        assert!(
+            !summary(
+                "11111111-1111-4111-9111-111111111111",
+                &inspection("11111111-1111-4111-9111-111111111111"),
+                false,
+            )
+            .contains("algorithm")
+        );
+    }
+
+    #[test]
+    fn summary_detects_all_supported_input_formats() {
+        let cases = [
+            ("  URN:UUID:018f2c0b-6c5b-7d2e-8f4a-123456789abc ", "urn"),
+            ("{018f2c0b-6c5b-7d2e-8f4a-123456789abc}", "braced"),
+            ("018f2c0b-6c5b-7d2e-8f4a-123456789abc", "canonical"),
+            ("018f2c0b6c5b7d2e8f4a123456789abc", "simple"),
+        ];
+        for (input, expected) in cases {
+            let expected = match expected {
+                "urn" => UuidOutputFormat::Urn,
+                "braced" => UuidOutputFormat::Braced,
+                "canonical" => UuidOutputFormat::Canonical,
+                "simple" => UuidOutputFormat::Simple,
+                _ => unreachable!(),
+            };
+            assert_eq!(input_format(input), expected);
+        }
+    }
+
+    #[test]
+    fn layout_and_timestamp_formatting_cover_empty_and_fallback_cases() {
+        let fields = vec![BitField {
+            name: "payload".to_owned(),
+            offset: 0,
+            width: 8,
+            value: 0xab,
+        }];
+        assert!(layout(&fields).contains("0..7"));
+        assert!(layout(&[]).contains("Bit layout"));
+
+        let valid = TimestampInfo {
+            unix_seconds: 1_700_000_000,
+            unix_millis: 1_700_000_000_123,
+            subsec_nanos: 123_000_000,
+        };
+        assert!(format_timestamp(&valid).contains("2023-"));
+        assert_eq!(
+            format_timestamp(&TimestampInfo {
+                unix_seconds: i64::MAX as u64,
+                unix_millis: 0,
+                subsec_nanos: 0,
+            }),
+            format!("unix:{}", i64::MAX as u64)
+        );
+        assert_eq!(
+            format_timestamp(&TimestampInfo {
+                unix_seconds: 0,
+                unix_millis: 0,
+                subsec_nanos: 1_000_000_000,
+            }),
+            "unix:0"
+        );
+    }
+}

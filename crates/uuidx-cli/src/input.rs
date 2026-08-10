@@ -96,7 +96,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::io::Cursor;
+    use std::{fs, io::Cursor};
 
     use super::*;
 
@@ -164,5 +164,55 @@ mod tests {
             records,
             vec![(0, "first".to_owned()), (1, "second".to_owned())]
         );
+    }
+
+    #[test]
+    fn for_each_record_reads_files_and_reports_open_errors() {
+        let path =
+            std::env::temp_dir().join(format!("uuidx-input-test-{}.txt", std::process::id()));
+        fs::write(&path, " first\n\nsecond\n").unwrap();
+        let input = InputArgs {
+            values: Vec::new(),
+            input: Some(path.clone()),
+            fail_fast: false,
+        };
+        let mut records = Vec::new();
+        let summary = for_each_record(&input, false, |index, value| {
+            records.push((index, value.to_owned()));
+            Ok(false)
+        })
+        .unwrap();
+        fs::remove_file(path).unwrap();
+        assert!(!summary.data_errors);
+        assert_eq!(
+            records,
+            vec![(0, "first".to_owned()), (1, "second".to_owned())]
+        );
+
+        let missing = InputArgs {
+            values: Vec::new(),
+            input: Some(std::env::temp_dir().join("uuidx-input-file-does-not-exist")),
+            fail_fast: false,
+        };
+        assert!(matches!(
+            for_each_record(&missing, false, |_, _| Ok(false)),
+            Err(CliError::Input(_))
+        ));
+    }
+
+    #[test]
+    fn callback_errors_are_propagated_without_being_data_errors() {
+        assert!(matches!(
+            process_values(["value"].into_iter(), false, |_, _| {
+                Err(CliError::Usage("callback failed".to_owned()))
+            }),
+            Err(CliError::Usage(message)) if message == "callback failed"
+        ));
+        assert!(matches!(
+            process_reader(Cursor::new("value\n"), false, |_, _| {
+                Err(CliError::Usage("callback failed".to_owned()))
+            }),
+            Err(CliError::Usage(message)) if message == "callback failed"
+        ));
     }
 }

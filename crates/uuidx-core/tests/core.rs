@@ -290,11 +290,82 @@ fn parsing_and_formatting_round_trip() {
 }
 
 #[test]
+fn public_format_and_type_contracts_are_stable() {
+    let uuid = parse_uuid("018f2c0b-6c5b-7d2e-8f4a-123456789abc").unwrap();
+
+    assert_eq!(uuid.get_version_num(), 7);
+    assert_eq!(uuid.hyphenated(), "018f2c0b-6c5b-7d2e-8f4a-123456789abc");
+    assert_eq!(uuid.simple(), "018f2c0b6c5b7d2e8f4a123456789abc");
+    assert_eq!(uuid.urn(), "urn:uuid:018f2c0b-6c5b-7d2e-8f4a-123456789abc");
+    assert_eq!(uuid.to_string(), uuid.hyphenated());
+
+    assert_eq!(
+        format_uuid(&uuid, UuidOutputFormat::Canonical),
+        "018f2c0b-6c5b-7d2e-8f4a-123456789abc"
+    );
+    assert_eq!(
+        format_uuid(&uuid, UuidOutputFormat::Simple),
+        "018f2c0b6c5b7d2e8f4a123456789abc"
+    );
+    assert_eq!(
+        format_uuid(&uuid, UuidOutputFormat::Urn),
+        "urn:uuid:018f2c0b-6c5b-7d2e-8f4a-123456789abc"
+    );
+    assert_eq!(
+        format_uuid(&uuid, UuidOutputFormat::Braced),
+        "{018f2c0b-6c5b-7d2e-8f4a-123456789abc}"
+    );
+
+    for (version, expected) in [
+        (GeneratableUuidVersion::V4, "v4"),
+        (GeneratableUuidVersion::V5, "v5"),
+        (GeneratableUuidVersion::V6, "v6"),
+        (GeneratableUuidVersion::V7, "v7"),
+        (GeneratableUuidVersion::V8, "v8"),
+    ] {
+        assert_eq!(version.to_string(), expected);
+    }
+    for (version, expected) in [
+        (InspectableUuidVersion::V1, "v1"),
+        (InspectableUuidVersion::V2, "v2"),
+        (InspectableUuidVersion::V3, "v3"),
+        (InspectableUuidVersion::V4, "v4"),
+        (InspectableUuidVersion::V5, "v5"),
+        (InspectableUuidVersion::V6, "v6"),
+        (InspectableUuidVersion::V7, "v7"),
+        (InspectableUuidVersion::V8, "v8"),
+        (InspectableUuidVersion::Nil, "nil"),
+        (InspectableUuidVersion::Max, "max"),
+        (InspectableUuidVersion::Unknown(12), "unknown(12)"),
+    ] {
+        assert_eq!(version.to_string(), expected);
+    }
+
+    assert_eq!(
+        Uuid::NAMESPACE_DNS.to_string(),
+        "6ba7b810-9dad-11d1-80b4-00c04fd430c8"
+    );
+    assert_eq!(
+        Uuid::NAMESPACE_URL.to_string(),
+        "6ba7b811-9dad-11d1-80b4-00c04fd430c8"
+    );
+    assert_eq!(
+        Uuid::NAMESPACE_OID.to_string(),
+        "6ba7b812-9dad-11d1-80b4-00c04fd430c8"
+    );
+    assert_eq!(
+        Uuid::NAMESPACE_X500.to_string(),
+        "6ba7b814-9dad-11d1-80b4-00c04fd430c8"
+    );
+}
+
+#[test]
 fn hex_parser_reports_shape_and_character_errors() {
     assert_eq!(
         parse_hex_array::<3>("0102ff").expect("valid hex"),
         [1, 2, 255]
     );
+    assert_eq!(parse_hex_array::<2>(" 0102 ").expect("trimmed hex"), [1, 2]);
     assert!(matches!(
         parse_hex_array::<3>("0102"),
         Err(uuidx_core::HexError::WrongLength {
@@ -359,6 +430,10 @@ fn uuid_wrapper_and_parser_report_special_and_invalid_values() {
     assert_eq!(inspect_uuid(&max).fields[0].width, 128);
     assert!(matches!(
         parse_uuid(""),
+        Err(uuidx_core::ParseUuidError::Empty)
+    ));
+    assert!(matches!(
+        parse_uuid("  \t  "),
         Err(uuidx_core::ParseUuidError::Empty)
     ));
     assert!(matches!(

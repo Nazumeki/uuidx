@@ -53,3 +53,16 @@ fn positive_count(value: &str) -> Result<u64, String> {
     }
     Ok(count)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn positive_count_accepts_positive_integers_and_rejects_invalid_values() {
+        assert_eq!(positive_count("1").unwrap(), 1);
+        assert_eq!(positive_count("42").unwrap(), 42);
+        assert!(positive_count("0").is_err());
+        assert!(positive_count("not-a-number").is_err());
+    }
+}

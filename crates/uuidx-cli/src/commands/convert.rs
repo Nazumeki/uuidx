@@ -1,7 +1,19 @@
-use crate::{cli::ConvertArgs, errors::CliError, input, output::Output};
+use crate::{
+    cli::ConvertArgs,
+    errors::CliError,
+    input,
+    output::{Output, OutputWriter},
+};
 use uuidx_core::UuidOutputFormat;
 
-pub fn run(args: &ConvertArgs, output: &mut Output) -> Result<bool, CliError> {
+pub fn run<WOut, WErr>(
+    args: &ConvertArgs,
+    output: &mut Output<WOut, WErr>,
+) -> Result<bool, CliError>
+where
+    WOut: OutputWriter,
+    WErr: OutputWriter,
+{
     let format: UuidOutputFormat = args.to.into();
     let summary = input::for_each_record(&args.input, args.input.fail_fast, |index, value| {
         match uuidx_core::parse_uuid(value) {
@@ -17,4 +29,46 @@ pub fn run(args: &ConvertArgs, output: &mut Output) -> Result<bool, CliError> {
         }
     })?;
     Ok(summary.data_errors)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cli::{GlobalOptions, InputArgs, OutputModeArg, UuidFormatArg};
+
+    fn args(values: &[&str]) -> ConvertArgs {
+        ConvertArgs {
+            input: InputArgs {
+                values: values.iter().map(|value| (*value).to_owned()).collect(),
+                input: None,
+                fail_fast: false,
+            },
+            to: UuidFormatArg::Urn,
+        }
+    }
+
+    fn output() -> Output<Vec<u8>, Vec<u8>> {
+        Output::with_writers(
+            &GlobalOptions {
+                output: OutputModeArg::Json,
+            },
+            Vec::new(),
+            Vec::new(),
+        )
+    }
+
+    #[test]
+    fn run_converts_valid_records_and_marks_invalid_records() {
+        let mut valid_output = output();
+        assert!(
+            !run(
+                &args(&["018f2c0b-6c5b-7d2e-8f4a-123456789abc"]),
+                &mut valid_output
+            )
+            .unwrap()
+        );
+
+        let mut invalid_output = output();
+        assert!(run(&args(&["not-a-uuid"]), &mut invalid_output).unwrap());
+    }
 }

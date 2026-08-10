@@ -8,9 +8,20 @@ use uuidx_core::{
     GeneratableUuidVersion, GenerationOptions, Uuid, UuidOutputFormat, parse_hex_array,
 };
 
-use crate::{cli::GenerateArgs, errors::CliError, output::Output};
+use crate::{
+    cli::GenerateArgs,
+    errors::CliError,
+    output::{Output, OutputWriter},
+};
 
-pub fn run(args: &GenerateArgs, output: &mut Output) -> Result<bool, CliError> {
+pub fn run<WOut, WErr>(
+    args: &GenerateArgs,
+    output: &mut Output<WOut, WErr>,
+) -> Result<bool, CliError>
+where
+    WOut: OutputWriter,
+    WErr: OutputWriter,
+{
     let version = parse_generation_version(&args.target)?;
     let format: UuidOutputFormat = args.format.into();
     let options = build_options(args, version)?;
@@ -226,5 +237,47 @@ mod tests {
         assert!(warnings_for(GeneratableUuidVersion::V7).is_empty());
         assert_eq!(warnings_for(GeneratableUuidVersion::V5).len(), 1);
         assert_eq!(warnings_for(GeneratableUuidVersion::V8).len(), 1);
+    }
+
+    #[test]
+    fn run_generates_values_and_maps_generation_errors_to_usage() {
+        let mut input = args();
+        input.target = "v4".to_owned();
+        input.count = 2;
+        let mut output = Output::with_writers(
+            &crate::cli::GlobalOptions {
+                output: crate::cli::OutputModeArg::Json,
+            },
+            Vec::new(),
+            Vec::new(),
+        );
+        assert!(!run(&input, &mut output).unwrap());
+
+        let mut input = args();
+        input.target = "v5".to_owned();
+        input.namespace = Some("dns".to_owned());
+        input.name = Some("uuidx".to_owned());
+        let mut output = Output::with_writers(
+            &crate::cli::GlobalOptions {
+                output: crate::cli::OutputModeArg::Json,
+            },
+            Vec::new(),
+            Vec::new(),
+        );
+        assert!(!run(&input, &mut output).unwrap());
+
+        let mut invalid = args();
+        invalid.target = "v1".to_owned();
+        let mut output = Output::with_writers(
+            &crate::cli::GlobalOptions {
+                output: crate::cli::OutputModeArg::Json,
+            },
+            Vec::new(),
+            Vec::new(),
+        );
+        assert!(matches!(
+            run(&invalid, &mut output),
+            Err(CliError::Usage(message)) if message.contains("inspect-only")
+        ));
     }
 }

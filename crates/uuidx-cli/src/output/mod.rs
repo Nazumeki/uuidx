@@ -5,7 +5,10 @@ mod pretty;
 
 use std::io::{self, IsTerminal, Write};
 
-use anstream::{AutoStream, ColorChoice};
+use anstream::{
+    AutoStream, ColorChoice,
+    stream::{AsLockedWrite, RawStream},
+};
 use serde::Serialize;
 use uuidx_core::{Uuid, UuidInspection, UuidOutputFormat};
 
@@ -16,20 +19,38 @@ use crate::{
 
 pub use mode::RenderMode;
 
-pub struct Output {
+pub(crate) trait OutputWriter: RawStream + AsLockedWrite {}
+
+impl<T> OutputWriter for T where T: RawStream + AsLockedWrite {}
+
+pub struct Output<WOut = io::Stdout, WErr = io::Stderr>
+where
+    WOut: OutputWriter,
+    WErr: OutputWriter,
+{
     mode: RenderMode,
-    stdout: AutoStream<io::Stdout>,
-    stderr: AutoStream<io::Stderr>,
+    stdout: AutoStream<WOut>,
+    stderr: AutoStream<WErr>,
 }
 
-impl Output {
+impl Output<io::Stdout, io::Stderr> {
     pub fn new(options: &GlobalOptions) -> Self {
+        Self::with_writers(options, io::stdout(), io::stderr())
+    }
+}
+
+impl<WOut, WErr> Output<WOut, WErr>
+where
+    WOut: OutputWriter,
+    WErr: OutputWriter,
+{
+    pub(crate) fn with_writers(options: &GlobalOptions, stdout: WOut, stderr: WErr) -> Self {
         let mode = resolve_mode(options.output);
         let color = resolve_color(mode);
         Self {
             mode,
-            stdout: AutoStream::new(io::stdout(), color),
-            stderr: AutoStream::new(io::stderr(), color),
+            stdout: AutoStream::new(stdout, color),
+            stderr: AutoStream::new(stderr, color),
         }
     }
 
@@ -196,6 +217,11 @@ fn resolve_color(output: RenderMode) -> ColorChoice {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use uuidx_core::{inspect_uuid, parse_uuid};
+
+    fn output(mode: OutputModeArg) -> Output<Vec<u8>, Vec<u8>> {
+        Output::with_writers(&GlobalOptions { output: mode }, Vec::new(), Vec::new())
+    }
 
     #[test]
     fn explicit_output_modes_are_stable() {
@@ -209,5 +235,51 @@ mod tests {
         assert_eq!(resolve_color(RenderMode::Plain), ColorChoice::Never);
         assert_eq!(resolve_color(RenderMode::Json), ColorChoice::Never);
         assert_eq!(resolve_color(RenderMode::Pretty), ColorChoice::Auto);
+    }
+
+    #[test]
+    fn render_methods_support_each_output_mode() {
+        let uuid = parse_uuid("018f2c0b-6c5b-7d2e-8f4a-123456789abc").unwrap();
+        let inspection = inspect_uuid(&uuid);
+        let warnings = vec!["test warning".to_owned()];
+
+        for mode in [
+            OutputModeArg::Plain,
+            OutputModeArg::Pretty,
+            OutputModeArg::Json,
+        ] {
+            let mut output = output(mode);
+            output
+                .generated(0, &uuid, "v7", UuidOutputFormat::Canonical, &warnings)
+                .unwrap();
+            output
+                .inspected_uuid(0, uuid.to_string().as_str(), &inspection, false, true)
+                .unwrap();
+            output
+                .converted(
+                    0,
+                    uuid.to_string().as_str(),
+                    &uuid,
+                    &uuid.simple(),
+                    UuidOutputFormat::Simple,
+                )
+                .unwrap();
+            output.validated(0, &uuid.to_string(), &uuid).unwrap();
+            output
+                .record_error("test", 0, "bad", "invalid", "invalid value")
+                .unwrap();
+            output.top_level_error("top-level failure").unwrap();
+            output.flush().unwrap();
+        }
+    }
+
+    #[cfg(feature = "ulid-inspect")]
+    #[test]
+    fn render_methods_support_ulid_inspection() {
+        let inspection = uuidx_core::inspect_ulid("01ARZ3NDEKTSV4RRFFQ69G5FAV").unwrap();
+        let mut output = output(OutputModeArg::Json);
+        output
+            .inspected_ulid(0, &inspection.normalized, &inspection)
+            .unwrap();
     }
 }

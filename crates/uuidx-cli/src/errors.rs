@@ -80,4 +80,17 @@ mod tests {
             2
         );
     }
+
+    #[test]
+    fn app_result_debug_output_keeps_failure_context() {
+        assert_eq!(format!("{:?}", AppResult::Success), "Success");
+        assert_eq!(format!("{:?}", AppResult::DataErrors), "DataErrors");
+        assert_eq!(
+            format!(
+                "{:?}",
+                AppResult::Failure(CliError::Usage("bad option".to_owned()))
+            ),
+            "Failure(Usage(\"bad option\"))"
+        );
+    }
 }
