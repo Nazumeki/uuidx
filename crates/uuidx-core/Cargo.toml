@@ -1,0 +1,18 @@
+[package]
+name = "uuidx-core"
+version = "0.1.0"
+description = "Core UUID generation, parsing, inspection, and formatting for uuidx"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+default = []
+ulid-inspect = ["dep:ulid"]
+
+[dependencies]
+hex = "0.4"
+thiserror = "2"
+uuid = { version = "1.24", features = ["v1", "v4", "v5", "v6", "v7", "v8"] }
+ulid = { version = "3", default-features = false, optional = true }

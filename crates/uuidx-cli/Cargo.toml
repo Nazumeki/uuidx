@@ -1,0 +1,27 @@
+[package]
+name = "uuidx-cli"
+version = "0.1.0"
+description = "Rich command-line interface for uuidx"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "uuidx"
+path = "src/main.rs"
+
+[features]
+default = ["ulid-inspect"]
+ulid-inspect = ["uuidx-core/ulid-inspect"]
+
+[dependencies]
+anstream = "1"
+anstyle = "1"
+clap = { version = "4.6", features = ["color", "derive", "wrap_help"] }
+hex = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+time = { version = "0.3", features = ["formatting", "parsing"] }
+uuidx-core = { path = "../uuidx-core" }
