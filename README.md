@@ -471,7 +471,7 @@ without default features must not silently claim ULID support.
 
 ### Requirements
 
-- Rust `1.85` or newer with Cargo.
+- Rust `1.88` or newer with Cargo.
 - [Just](https://github.com/casey/just) for the repository's standard command
   interface.
 - `cargo-llvm-cov` only when generating coverage reports.
@@ -518,7 +518,7 @@ just coverage-lcov
 GitHub Actions runs the main CI workflow for pushes and pull requests targeting
 `main`, as well as manual runs. It checks formatting and Clippy, tests all
 features and no-default-features on Linux, Windows, and macOS, verifies the
-minimum Rust `1.85.0` toolchain, then builds the release CLI and runs smoke
+minimum Rust `1.88.0` toolchain, then builds the release CLI and runs smoke
 checks. The workflow uses stable Rust for the normal matrix.
 
 Additional repository automation includes:

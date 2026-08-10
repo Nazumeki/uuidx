@@ -50,7 +50,7 @@ proof of concept in a public issue.
 
 ## Development setup
 
-The minimum supported Rust version is `1.85`. The workspace uses edition 2024.
+The minimum supported Rust version is `1.88`. The workspace uses edition 2024.
 Install Rust and Cargo through [rustup](https://rustup.rs/), then verify the
 checkout:
 
@@ -285,7 +285,7 @@ Before requesting review, confirm:
 
 The main GitHub Actions workflow additionally runs formatting, Clippy, and the
 all-feature and minimal-feature test matrix on Linux, Windows, and macOS. It
-also verifies the minimum Rust `1.85.0` toolchain before the release build and
+also verifies the minimum Rust `1.88.0` toolchain before the release build and
 smoke checks. Separate workflows cover coverage, CodeQL, dependency review,
 supply-chain checks, and tagged release packaging.
 
