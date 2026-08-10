@@ -96,6 +96,8 @@ the CLI, and future output consumers without coupling those concerns.
 
 ## Development interface
 
-The root `justfile` is the canonical entry point for formatting, both feature
-matrices, linting, release builds, smoke checks, and optional coverage reports.
-CI invokes `just ci` so local and automated verification use the same recipes.
+The root `justfile` is the canonical local entry point for formatting, both
+feature matrices, linting, release builds, smoke checks, and optional coverage
+reports. GitHub Actions runs the equivalent Cargo checks directly, adds the
+minimum Rust 1.85 verification and an operating-system feature matrix, and
+then performs the release build and smoke checks.

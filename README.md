@@ -375,10 +375,13 @@ reference.
 
 ## Rust library
 
-`uuidx-core` exposes the domain API without CLI, terminal, or JSON
-dependencies. The public generation enum intentionally contains only v4-v8;
-inspection uses a separate enum so legacy and reserved values can still be
-understood.
+`uuidx-core` is a separately usable Rust crate in this workspace. It owns the
+domain implementation without CLI, terminal, or JSON dependencies and can be
+exposed or deployed independently. This repository does not prescribe a
+registry, hosting service, or repository URL for that deployment.
+
+The generation enum intentionally contains only v4-v8; inspection uses a
+separate enum so legacy and reserved values can still be understood.
 
 The core API includes:
 
@@ -412,16 +415,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-The core crate has no default features. Enable `ulid-inspect` only when a Rust
-caller needs read-only ULID inspection:
+The core crate has no default features. Enable `ulid-inspect` when a Rust
+application needs read-only ULID inspection. The dependency source can be a
+path, workspace, or registry selected by the deployment:
 
 ```toml
 [dependencies]
 uuidx-core = { version = "0.1", features = ["ulid-inspect"] }
 ```
-
-The workspace currently consumes `uuidx-core` by path, while the example shows
-the package-level dependency shape for a downstream application.
 
 ## Architecture
 
@@ -442,7 +443,7 @@ Repository layout:
 ```text
 crates/
   uuidx-core/
-    src/              Public UUID domain API and version-specific behavior
+    src/              UUID domain API and version-specific behavior
     tests/            Core integration tests
   uuidx-cli/
     src/              CLI parsing, commands, input, output, and errors
@@ -502,7 +503,7 @@ The default `just` recipe is `just check`.
 | `just doc`       | Build workspace API documentation without dependencies.            |
 | `just smoke`     | Run representative generation and JSON inspection commands.        |
 | `just check`     | Run formatting, tests, and both lint matrices.                     |
-| `just ci`        | Run `check`, `build`, and `build-min`, matching CI.                |
+| `just ci`        | Run the local aggregate `check`, `build`, and `build-min` gate.     |
 
 Coverage is optional:
 
@@ -516,8 +517,9 @@ just coverage-lcov
 
 GitHub Actions runs the main CI workflow for pushes and pull requests targeting
 `main`, as well as manual runs. It checks formatting and Clippy, tests all
-features and no-default-features on Linux, Windows, and macOS, then builds the
-release CLI and runs smoke checks. The workflow uses a stable Rust toolchain.
+features and no-default-features on Linux, Windows, and macOS, verifies the
+minimum Rust `1.85.0` toolchain, then builds the release CLI and runs smoke
+checks. The workflow uses stable Rust for the normal matrix.
 
 Additional repository automation includes:
 

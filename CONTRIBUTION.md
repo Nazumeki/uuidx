@@ -134,9 +134,9 @@ When adding or changing a UUID rule:
    feature-gated code.
 
 The public `uuidx_core::Uuid` is a wrapper around the `uuid` crate's value. The
-underlying constructors stay private to the core crate so callers cannot
-bypass the generation policy through a re-export. Do not reintroduce that
-escape hatch for convenience.
+underlying constructors stay private to the core crate so callers cannot bypass
+the generation policy through a re-export. Do not reintroduce that escape hatch
+for convenience.
 
 ### CLI behavior
 
@@ -284,9 +284,10 @@ Before requesting review, confirm:
       run, and any user-visible behavior change.
 
 The main GitHub Actions workflow additionally runs formatting, Clippy, and the
-all-feature and minimal-feature test matrix on Linux, Windows, and macOS before
-the release build and smoke checks. Separate workflows cover coverage, CodeQL,
-dependency review, supply-chain checks, and tagged release packaging.
+all-feature and minimal-feature test matrix on Linux, Windows, and macOS. It
+also verifies the minimum Rust `1.85.0` toolchain before the release build and
+smoke checks. Separate workflows cover coverage, CodeQL, dependency review,
+supply-chain checks, and tagged release packaging.
 
 ## Review expectations
 

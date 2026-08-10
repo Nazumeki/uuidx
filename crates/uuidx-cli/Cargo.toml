@@ -5,7 +5,6 @@ description = "Rich command-line interface for uuidx"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-repository.workspace = true
 
 [[bin]]
 name = "uuidx"
