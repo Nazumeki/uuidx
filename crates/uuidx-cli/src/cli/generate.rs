@@ -5,7 +5,7 @@ use super::UuidFormatArg;
 #[derive(Debug, Args)]
 #[command(next_help_heading = "Generate options")]
 pub struct GenerateArgs {
-    /// Generation target. Only v4, v5, v6, v7, and v8 are supported.
+    /// Generation target. Only v3, v4, v5, v6, v7, and v8 are supported.
     #[arg(value_name = "VERSION", default_value = "v7")]
     pub target: String,
 
@@ -13,11 +13,11 @@ pub struct GenerateArgs {
     #[arg(short = 'n', long, default_value_t = 1, value_parser = positive_count)]
     pub count: u64,
 
-    /// [v5] Namespace UUID or dns, url, oid, or x500.
+    /// [v3/v5] Namespace UUID or dns, url, oid, or x500.
     #[arg(short = 's', long)]
     pub namespace: Option<String>,
 
-    /// [v5] Name bytes.
+    /// [v3/v5] Name bytes.
     #[arg(short = 'N', long)]
     pub name: Option<String>,
 

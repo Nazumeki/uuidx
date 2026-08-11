@@ -74,6 +74,7 @@ impl fmt::Display for Uuid {
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum GeneratableUuidVersion {
+    V3,
     V4,
     V5,
     V6,
@@ -84,6 +85,7 @@ pub enum GeneratableUuidVersion {
 impl fmt::Display for GeneratableUuidVersion {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
+            Self::V3 => "v3",
             Self::V4 => "v4",
             Self::V5 => "v5",
             Self::V6 => "v6",
@@ -98,6 +100,7 @@ impl FromStr for GeneratableUuidVersion {
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         match value.to_ascii_lowercase().as_str() {
+            "3" | "v3" => Ok(Self::V3),
             "4" | "v4" => Ok(Self::V4),
             "5" | "v5" => Ok(Self::V5),
             "6" | "v6" => Ok(Self::V6),

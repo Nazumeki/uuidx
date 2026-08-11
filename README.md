@@ -12,7 +12,7 @@ generation paths are rejected by the core API and by the CLI.
 
 ## Capabilities
 
-- Generate UUID v4, v5, v6, v7, and v8 values with version-specific options.
+- Generate UUID v3, v4, v5, v6, v7, and v8 values with version-specific options.
 - Inspect UUID versions, variants, bytes, timestamps, node metadata, name hash
   algorithms, custom payloads, and bit layouts.
 - Validate UUID text in batches without changing the generation policy.
@@ -35,7 +35,7 @@ because its variant is not RFC 9562.
 | ---------------------- | ------- | -------- | ------- | -------- | -------------------------------------------------------------------------------- |
 | v1                     | Yes     | Yes      | Yes     | No       | Legacy time-based UUID; timestamp, clock sequence, and node data may be exposed. |
 | v2                     | Yes     | Yes      | Yes     | No       | DCE Security semantics outside RFC 9562.                                         |
-| v3                     | Yes     | Yes      | Yes     | No       | Legacy MD5 name hashing.                                                         |
+| v3                     | Yes     | Yes      | Yes     | Yes      | Legacy MD5 name hashing; a warning is emitted.                                   |
 | v4                     | Yes     | Yes      | Yes     | Yes      | Random UUID.                                                                     |
 | v5                     | Yes     | Yes      | Yes     | Yes      | Deterministic namespace/name UUID using SHA-1; a warning is emitted.             |
 | v6                     | Yes     | Yes      | Yes     | Yes      | Time-ordered UUID with an optional timestamp and node.                           |
@@ -47,6 +47,10 @@ because its variant is not RFC 9562.
 Generation details:
 
 - `v4` uses random bytes and accepts no version-specific input.
+- `v3` requires both `--namespace` and `--name`. The namespace may be `dns`,
+  `url`, `oid`, `x500`, or an explicit UUID. The name is passed as UTF-8
+  bytes. MD5 is retained for standards compatibility and is reported as a
+  warning.
 - `v5` requires both `--namespace` and `--name`. The namespace may be `dns`,
   `url`, `oid`, `x500`, or an explicit UUID. The name is passed as UTF-8
   bytes. SHA-1 is retained for standards compatibility and is reported as a
@@ -59,8 +63,8 @@ Generation details:
 - `v8` requires exactly 16 bytes of hexadecimal application data. The UUID
   version and variant positions are controlled by the UUID encoding, so the
   final value is not a raw copy of every input bit.
-- `v1`, `v2`, and `v3` are deliberately inspect-only. There is no compatibility
-  generation path for them.
+- `v1` and `v2` remain inspect-only. UUID v1 exposes host-related metadata, and
+  UUID v2 uses DCE Security semantics outside RFC 9562.
 
 ## Installation
 
@@ -114,6 +118,7 @@ Generate a deterministic UUID v5:
 
 ```console
 uuidx generate v5 --namespace dns --name example.com --output plain
+uuidx generate v3 --namespace dns --name example.org --output plain
 ```
 
 Inspect timestamp and bit-layout metadata:
@@ -157,7 +162,7 @@ and their aliases are:
 
 | Command    | Alias | Purpose                                        |
 | ---------- | ----- | ---------------------------------------------- |
-| `generate` | `g`   | Generate UUID v4-v8 values.                    |
+| `generate` | `g`   | Generate UUID v3-v8 values.                    |
 | `inspect`  | `i`   | Inspect UUIDs and optionally recognize ULIDs.  |
 | `validate` | `v`   | Validate UUID syntax and report record errors. |
 | `convert`  | `c`   | Convert UUID text between standard formats.    |
@@ -178,14 +183,14 @@ command and its options.
 uuidx generate [VERSION] [OPTIONS]
 ```
 
-`VERSION` accepts `v4`, `v5`, `v6`, `v7`, or `v8`, with or without the `v`
+`VERSION` accepts `v3`, `v4`, `v5`, `v6`, `v7`, or `v8`, with or without the `v`
 prefix. It defaults to `v7`. `--count` must be a positive integer.
 
 | Option                          | Applies to | Description                                                        |
 | ------------------------------- | ---------- | ------------------------------------------------------------------ |
 | `-n`, `--count <COUNT>`         | All        | Number of values to generate. Default: `1`.                        |
-| `-s`, `--namespace <NAMESPACE>` | v5         | Named namespace (`dns`, `url`, `oid`, `x500`) or UUID text.        |
-| `-N`, `--name <NAME>`           | v5         | Name text, encoded as UTF-8 bytes.                                 |
+| `-s`, `--namespace <NAMESPACE>` | v3, v5     | Named namespace (`dns`, `url`, `oid`, `x500`) or UUID text.        |
+| `-N`, `--name <NAME>`           | v3, v5     | Name text, encoded as UTF-8 bytes.                                 |
 | `-d`, `--node <NODE>`           | v6         | Twelve hexadecimal characters representing six bytes, or `random`. |
 | `-t`, `--timestamp <TIMESTAMP>` | v6, v7     | RFC 3339 timestamp or non-negative Unix milliseconds.              |
 | `-C`, `--custom <HEX>`          | v8         | Exactly 32 hexadecimal characters representing 16 bytes.           |
@@ -196,6 +201,7 @@ Examples:
 ```console
 uuidx generate v4 --count 3 --output plain
 uuidx generate v5 --namespace url --name https://example.com --output plain
+uuidx generate v3 --namespace dns --name example.org --output plain
 uuidx generate v6 --timestamp 1700000000123 --node 020000000001 --output plain
 uuidx generate v7 --timestamp 2024-04-29T22:48:17.243Z --output plain
 uuidx generate v8 --custom 00112233445566778899aabbccddeeff --output plain
@@ -203,7 +209,7 @@ uuidx generate v4 --format urn --output plain
 ```
 
 Options are version-scoped. For example, passing `--custom` to v4 or omitting
-the required v5 namespace/name pair is a usage error with exit status `2`.
+the required v3/v5 namespace/name pair is a usage error with exit status `2`.
 
 ### `inspect`
 
@@ -380,7 +386,7 @@ domain implementation without CLI, terminal, or JSON dependencies and can be
 exposed or deployed independently. This repository does not prescribe a
 registry, hosting service, or repository URL for that deployment.
 
-The generation enum intentionally contains only v4-v8; inspection uses a
+The generation enum intentionally contains only v3-v8; inspection uses a
 separate enum so legacy and reserved values can still be understood.
 
 The core API includes:

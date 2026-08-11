@@ -77,7 +77,7 @@ pub enum OutputModeArg {
 
 #[derive(Debug, Subcommand)]
 pub enum Command {
-    /// Generate UUID v4-v8 values.
+    /// Generate UUID v3-v8 values.
     #[command(visible_alias = "g")]
     Generate(GenerateArgs),
     /// Inspect UUIDs and optionally recognize ULIDs in read-only mode.

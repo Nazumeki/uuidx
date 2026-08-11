@@ -15,5 +15,5 @@ ulid-inspect = ["dep:ulid"]
 [dependencies]
 hex = "0.4"
 thiserror = "2"
-uuid = { version = "1.24", features = ["v1", "v4", "v5", "v6", "v7", "v8"] }
+uuid = { version = "1.24", features = ["v1", "v3", "v4", "v5", "v6", "v7", "v8"] }
 ulid = { version = "3", default-features = false, optional = true }

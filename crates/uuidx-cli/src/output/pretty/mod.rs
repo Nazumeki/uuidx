@@ -99,9 +99,7 @@ fn inspection_warning(inspection: &UuidInspection) -> Option<&'static str> {
         uuidx_core::InspectableUuidVersion::V2 => {
             Some("UUID v2 DCE Security semantics are outside RFC 9562; generation is disabled.")
         }
-        uuidx_core::InspectableUuidVersion::V3 => {
-            Some("UUID v3 uses legacy MD5 name hashing; generation is disabled.")
-        }
+        uuidx_core::InspectableUuidVersion::V3 => Some("UUID v3 uses legacy MD5 name hashing."),
         uuidx_core::InspectableUuidVersion::V5 => Some("UUID v5 uses legacy SHA-1 name hashing."),
         _ => None,
     }

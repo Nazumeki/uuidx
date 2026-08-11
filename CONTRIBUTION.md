@@ -25,8 +25,8 @@ The repository follows these principles:
 - Treat sensitive UUID metadata, especially time-based node identifiers, as
   data that may require deliberate redaction.
 
-The current generation policy is intentional: v4, v5, v6, v7, and v8 are
-generation targets; v1, v2, and v3 remain available for parsing, inspection,
+The current generation policy is intentional: v3, v4, v5, v6, v7, and v8 are
+generation targets; v1 and v2 remain available for parsing, inspection,
 validation, and conversion. ULID support is optional and inspection-only.
 Changes that broaden this policy need a clear design decision and matching
 tests rather than a fallback path.
@@ -117,7 +117,7 @@ hard to validate.
 | `error.rs` | Public domain errors for parsing, payloads, and generation options. |
 | `parse.rs` | UUID text parsing. |
 | `format.rs` | UUID output formats and fixed-size hexadecimal payload parsing. |
-| `generate/` | Version-specific v4-v8 generation. |
+| `generate/` | Version-specific v3-v8 generation. |
 | `inspect/` | Version classification, variants, metadata, and bit layouts. |
 | `inspect/ulid.rs` | Optional read-only ULID inspection. |
 

@@ -125,6 +125,7 @@ current warnings are:
 
 | Condition | Warning |
 | --- | --- |
+| Generate, inspect, or convert UUID v3 | `UUID v3 uses legacy MD5 name hashing` |
 | Generate, inspect, or convert UUID v5 | `UUID v5 uses legacy SHA-1 name hashing` |
 | Generate UUID v8 | `UUID v8 uniqueness is application-defined` |
 | Inspect UUID v1 | `UUID v1 exposes timestamp and node metadata` |

@@ -129,10 +129,14 @@ impl JsonRecord {
             fields: None,
             error: None,
             format: Some(format.to_string()),
-            warnings: if inspection.version == uuidx_core::InspectableUuidVersion::V5 {
-                vec!["UUID v5 uses legacy SHA-1 name hashing".to_owned()]
-            } else {
-                Vec::new()
+            warnings: match inspection.version {
+                uuidx_core::InspectableUuidVersion::V3 => {
+                    vec!["UUID v3 uses legacy MD5 name hashing".to_owned()]
+                }
+                uuidx_core::InspectableUuidVersion::V5 => {
+                    vec!["UUID v5 uses legacy SHA-1 name hashing".to_owned()]
+                }
+                _ => Vec::new(),
             },
         }
     }
@@ -343,6 +347,21 @@ mod tests {
         assert_eq!(
             converted_json["warnings"][0],
             "UUID v5 uses legacy SHA-1 name hashing"
+        );
+
+        let v3 = parse_uuid("04738bdf-b25a-3829-a801-b21a1d25095b").unwrap();
+        let converted = JsonRecord::converted(
+            4,
+            "04738bdfb25a3829a801b21a1d25095b",
+            &v3,
+            "04738bdf-b25a-3829-a801-b21a1d25095b",
+            UuidOutputFormat::Canonical,
+        );
+        let converted_json = serde_json::to_value(converted).unwrap();
+        assert_eq!(converted_json["version"], "v3");
+        assert_eq!(
+            converted_json["warnings"][0],
+            "UUID v3 uses legacy MD5 name hashing"
         );
 
         let v4 = parse_uuid("11111111-1111-4111-9111-111111111111").unwrap();

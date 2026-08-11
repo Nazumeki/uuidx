@@ -19,13 +19,13 @@ or another Rust program. The CLI crate does not implement UUID bit rules.
 | `error.rs` | Domain errors for parsing, hex payloads, and generation options |
 | `parse.rs` | UUID text parsing through the `uuid` crate |
 | `format.rs` | Canonical, simple, URN, and braced UUID formats plus fixed-size hex payloads |
-| `generate/` | Version-specific v4-v8 generation modules |
+| `generate/` | Version-specific v3-v8 generation modules |
 | `inspect/` | Version classification, RFC variant detection, metadata, and bit layouts |
 | `inspect/ulid.rs` | Optional ULID parsing for read-only inspection |
 
-The public generation enum intentionally contains only v4-v8. That makes
+The public generation enum intentionally contains only v3-v8. That makes
 unsupported generation a type-level property rather than a runtime fallback.
-Inspection uses a separate enum because legacy v1-v3 and reserved Nil/Max data
+Inspection uses a separate enum because legacy v1-v2 and reserved Nil/Max data
 must still be understood.
 
 The `uuid` crate remains responsible for UUID construction and version-specific

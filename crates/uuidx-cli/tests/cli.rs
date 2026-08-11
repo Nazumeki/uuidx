@@ -101,6 +101,19 @@ fn every_supported_generation_target_is_available() {
         (
             vec![
                 "generate",
+                "v3",
+                "--namespace",
+                "dns",
+                "--name",
+                "example.org",
+                "--output",
+                "plain",
+            ],
+            3,
+        ),
+        (
+            vec![
+                "generate",
                 "v6",
                 "--timestamp",
                 "1700000000123",
@@ -146,7 +159,7 @@ fn every_supported_generation_target_is_available() {
 
 #[test]
 fn generation_rejects_legacy_versions() {
-    for version in ["v1", "v2", "v3", "nil", "max"] {
+    for version in ["v1", "v2", "nil", "max"] {
         let output = run(&["generate", version, "--output", "plain"]);
         assert_eq!(output.status.code(), Some(2));
         let error = String::from_utf8(output.stderr).expect("stderr should be UTF-8");
@@ -211,6 +224,29 @@ fn v5_generation_is_deterministic() {
     )
     .expect("generated UUID should parse");
     assert_eq!(uuid.get_version_num(), 5);
+}
+
+#[test]
+fn v3_generation_is_deterministic_and_warns_about_md5() {
+    let args = [
+        "generate",
+        "v3",
+        "--namespace",
+        "dns",
+        "--name",
+        "example.org",
+        "--output",
+        "json",
+    ];
+    let output = run(&args);
+    assert!(output.status.success());
+    let record: Value = serde_json::from_slice(&output.stdout).expect("JSON should parse");
+    assert_eq!(record["version"], "v3");
+    assert_eq!(record["value"], "04738bdf-b25a-3829-a801-b21a1d25095b");
+    assert_eq!(
+        record["warnings"][0],
+        "UUID v3 uses legacy MD5 name hashing"
+    );
 }
 
 #[test]
@@ -607,7 +643,7 @@ fn help_lists_the_user_facing_commands() {
     assert!(help.contains("inspect"));
     assert!(help.contains("validate"));
     assert!(help.contains("convert"));
-    assert!(help.contains("generate  Generate UUID v4-v8 values [alias: g]"));
+    assert!(help.contains("generate  Generate UUID v3-v8 values [alias: g]"));
     assert!(help.contains(
         "inspect   Inspect UUIDs and optionally recognize ULIDs in read-only mode [alias: i]"
     ));
@@ -656,8 +692,8 @@ fn command_help_explains_scoped_options_and_formats() {
     let generate = run(&["generate", "--help"]);
     assert!(generate.status.success());
     let generate_help = String::from_utf8(generate.stdout).expect("help should be UTF-8");
-    assert!(generate_help.contains("[v5] Namespace UUID"));
-    assert!(generate_help.contains("[v5] Name bytes"));
+    assert!(generate_help.contains("[v3/v5] Namespace UUID"));
+    assert!(generate_help.contains("[v3/v5] Name bytes"));
     assert!(generate_help.contains("[v6] Six-byte node ID"));
     assert!(generate_help.contains("[v6/v7] RFC3339 timestamp"));
     assert!(generate_help.contains("[v8] Sixteen custom bytes as hexadecimal"));

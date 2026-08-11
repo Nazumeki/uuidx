@@ -37,8 +37,8 @@ where
 
 fn parse_generation_version(value: &str) -> Result<GeneratableUuidVersion, CliError> {
     match value.to_ascii_lowercase().as_str() {
-        "v1" | "1" | "v2" | "2" | "v3" | "3" => Err(CliError::Usage(format!(
-            "UUID {value} is inspect-only; generation supports v4, v5, v6, v7, and v8"
+        "v1" | "1" | "v2" | "2" => Err(CliError::Usage(format!(
+            "UUID {value} is inspect-only; generation supports v3, v4, v5, v6, v7, and v8"
         ))),
         other => GeneratableUuidVersion::from_str(other).map_err(CliError::Usage),
     }
@@ -106,6 +106,7 @@ fn parse_timestamp(value: &str) -> Result<SystemTime, CliError> {
 
 fn warnings_for(version: GeneratableUuidVersion) -> Vec<String> {
     match version {
+        GeneratableUuidVersion::V3 => vec!["UUID v3 uses legacy MD5 name hashing".to_owned()],
         GeneratableUuidVersion::V5 => vec!["UUID v5 uses legacy SHA-1 name hashing".to_owned()],
         GeneratableUuidVersion::V8 => vec!["UUID v8 uniqueness is application-defined".to_owned()],
         _ => Vec::new(),
@@ -132,7 +133,11 @@ mod tests {
     }
 
     #[test]
-    fn generation_target_parser_accepts_aliases_and_blocks_legacy_versions() {
+    fn generation_target_parser_accepts_aliases_and_blocks_unsupported_versions() {
+        assert_eq!(
+            parse_generation_version("3").unwrap(),
+            GeneratableUuidVersion::V3
+        );
         assert_eq!(
             parse_generation_version("4").unwrap(),
             GeneratableUuidVersion::V4
@@ -141,7 +146,7 @@ mod tests {
             parse_generation_version("V8").unwrap(),
             GeneratableUuidVersion::V8
         );
-        for target in ["v1", "2", "V3"] {
+        for target in ["v1", "2"] {
             assert!(matches!(
                 parse_generation_version(target),
                 Err(CliError::Usage(message)) if message.contains("inspect-only")
@@ -233,6 +238,7 @@ mod tests {
 
     #[test]
     fn warnings_are_reserved_for_legacy_or_application_defined_versions() {
+        assert_eq!(warnings_for(GeneratableUuidVersion::V3).len(), 1);
         assert!(warnings_for(GeneratableUuidVersion::V4).is_empty());
         assert!(warnings_for(GeneratableUuidVersion::V7).is_empty());
         assert_eq!(warnings_for(GeneratableUuidVersion::V5).len(), 1);

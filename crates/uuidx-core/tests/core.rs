@@ -36,17 +36,21 @@ fn assert_unexpected(options: GenerationOptions, expected_option: &'static str) 
 #[test]
 fn only_supported_versions_are_generatable() {
     for (version, expected) in [
+        (GeneratableUuidVersion::V3, InspectableUuidVersion::V3),
         (GeneratableUuidVersion::V4, InspectableUuidVersion::V4),
         (GeneratableUuidVersion::V5, InspectableUuidVersion::V5),
         (GeneratableUuidVersion::V6, InspectableUuidVersion::V6),
         (GeneratableUuidVersion::V7, InspectableUuidVersion::V7),
         (GeneratableUuidVersion::V8, InspectableUuidVersion::V8),
     ] {
-        let uuid = if version == GeneratableUuidVersion::V5 {
+        let uuid = if matches!(
+            version,
+            GeneratableUuidVersion::V3 | GeneratableUuidVersion::V5
+        ) {
             let mut options = GenerationOptions::new(version);
             options.namespace = Some(Uuid::NAMESPACE_DNS);
             options.name = Some(b"uuidx".to_vec());
-            generate_uuid(&options).expect("v5 generation should succeed")
+            generate_uuid(&options).expect("name-based generation should succeed")
         } else if version == GeneratableUuidVersion::V8 {
             let mut options = GenerationOptions::new(version);
             options.custom = Some([0xabu8; 16]);
@@ -79,7 +83,32 @@ fn v5_is_deterministic_and_reports_sha1() {
 }
 
 #[test]
+fn v3_matches_the_rfc_vector_and_reports_md5() {
+    let mut options = GenerationOptions::new(GeneratableUuidVersion::V3);
+    options.namespace = Some(Uuid::NAMESPACE_DNS);
+    options.name = Some(b"example.org".to_vec());
+
+    let first = generate_uuid(&options).expect("v3 generation should succeed");
+    let second = generate_uuid(&options).expect("v3 generation should succeed");
+    assert_eq!(first, second);
+    assert_eq!(first.to_string(), "04738bdf-b25a-3829-a801-b21a1d25095b");
+    assert_eq!(
+        inspect_uuid(&first).metadata,
+        UuidMetadata::NameBased {
+            algorithm: NameHashAlgorithm::Md5
+        }
+    );
+}
+
+#[test]
 fn name_and_custom_generators_require_their_payloads() {
+    let v3_error = generate_uuid(&GenerationOptions::new(GeneratableUuidVersion::V3))
+        .expect_err("v3 should require namespace and name");
+    assert!(matches!(
+        v3_error,
+        GenerateError::MissingNameArguments { .. }
+    ));
+
     let name_error = generate_uuid(&GenerationOptions::new(GeneratableUuidVersion::V5))
         .expect_err("v5 should require namespace and name");
     assert!(matches!(
@@ -142,6 +171,12 @@ fn generators_reject_options_outside_their_contracts() {
     v5.name = Some(b"uuidx".to_vec());
     v5.custom = Some([0; 16]);
     assert_unexpected(v5, "--custom");
+
+    let mut v3 = GenerationOptions::new(GeneratableUuidVersion::V3);
+    v3.namespace = Some(Uuid::NAMESPACE_DNS);
+    v3.name = Some(b"uuidx".to_vec());
+    v3.node = Some([0; 6]);
+    assert_unexpected(v3, "--node");
 
     let mut v6 = GenerationOptions::new(GeneratableUuidVersion::V6);
     v6.namespace = Some(Uuid::NAMESPACE_DNS);
@@ -317,6 +352,7 @@ fn public_format_and_type_contracts_are_stable() {
     );
 
     for (version, expected) in [
+        (GeneratableUuidVersion::V3, "v3"),
         (GeneratableUuidVersion::V4, "v4"),
         (GeneratableUuidVersion::V5, "v5"),
         (GeneratableUuidVersion::V6, "v6"),
@@ -385,6 +421,12 @@ fn hex_parser_reports_shape_and_character_errors() {
 
 #[test]
 fn parser_and_format_enums_cover_aliases_and_errors() {
+    for value in ["3", "v3", "V3"] {
+        assert_eq!(
+            GeneratableUuidVersion::from_str(value).unwrap(),
+            GeneratableUuidVersion::V3
+        );
+    }
     for value in ["4", "v4", "V4"] {
         assert_eq!(
             GeneratableUuidVersion::from_str(value).unwrap(),
