@@ -1,10 +1,12 @@
 [package]
 name = "uuidx-core"
-version = "0.1.0"
+version.workspace = true
 description = "Core UUID generation, parsing, inspection, and formatting for uuidx"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+readme.workspace = true
+repository.workspace = true
 
 [features]
 default = []

@@ -1,10 +1,12 @@
 [package]
 name = "uuidx-cli"
-version = "0.1.0"
+version.workspace = true
 description = "Rich command-line interface for uuidx"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+readme.workspace = true
+repository.workspace = true
 
 [[bin]]
 name = "uuidx"
@@ -23,4 +25,4 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
 time = { version = "0.3.47", features = ["formatting", "parsing"] }
-uuidx-core = { path = "../uuidx-core" }
+uuidx-core.workspace = true

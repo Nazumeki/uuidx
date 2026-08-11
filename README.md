@@ -530,9 +530,12 @@ Additional repository automation includes:
 - `scorecard.yml` runs OpenSSF supply-chain checks on the main branch and on a
   schedule.
 - `dependabot.yml` checks Cargo dependencies weekly.
-- `release.yml` verifies version tags, builds archives for Linux, Windows, and
-  Intel and ARM macOS targets, generates provenance attestations, and publishes
-  a GitHub release.
+- `release.yml` accepts `vMAJOR.MINOR.PATCH` tags with optional `-beta[.N]` or
+  `-rc[.N]` suffixes, verifies the tag against the workspace version, builds
+  archives for Linux, Windows, and Intel and ARM macOS targets, generates
+  provenance attestations, and publishes a GitHub release. Stable `v1.x.x`
+  releases are also published to crates.io; `0.x.x`, prerelease, and later
+  major versions remain GitHub-only.
 
 ### Making changes
 
