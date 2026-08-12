@@ -1,3 +1,5 @@
+#![cfg_attr(target_env = "msvc", allow(linker_messages))]
+
 //! WebAssembly bindings for uuidx UUID operations.
 //!
 //! The JavaScript API exposes UUID generation, validation, formatting, and
