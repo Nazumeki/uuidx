@@ -515,15 +515,8 @@ fn pretty_generation_conversion_and_validation_have_command_context() {
 }
 
 #[test]
-fn short_command_options_cover_input_kind_and_conversion_target() {
-    let inspected = run(&[
-        "i",
-        "018f2c0b-6c5b-7d2e-8f4a-123456789abc",
-        "-k",
-        "uuid",
-        "-o",
-        "json",
-    ]);
+fn short_command_aliases_and_conversion_target_work() {
+    let inspected = run(&["i", "018f2c0b-6c5b-7d2e-8f4a-123456789abc", "-o", "json"]);
     assert!(inspected.status.success());
 
     let converted = run(&[
@@ -701,7 +694,7 @@ fn command_help_explains_scoped_options_and_formats() {
 
 #[cfg(feature = "ulid-inspect")]
 #[test]
-fn inspect_auto_recognizes_ulid_without_converting_it() {
+fn inspect_recognizes_ulid_without_converting_it() {
     let output = run(&["inspect", "01ARZ3NDEKTSV4RRFFQ69G5FAV", "--output", "json"]);
     assert!(output.status.success());
     let record: Value = serde_json::from_slice(&output.stdout).expect("ULID JSON should parse");
@@ -710,44 +703,18 @@ fn inspect_auto_recognizes_ulid_without_converting_it() {
     assert_eq!(record["warnings"][0], "ULID support is inspection-only");
 }
 
-#[cfg(feature = "ulid-inspect")]
 #[test]
-fn explicit_inspection_kinds_enforce_the_selected_family() {
-    let ulid = run(&[
-        "inspect",
-        "01ARZ3NDEKTSV4RRFFQ69G5FAV",
-        "--kind",
-        "ulid",
-        "--output",
-        "json",
-    ]);
-    assert!(ulid.status.success());
-    let uuid = run(&[
+fn inspect_rejects_removed_kind_option() {
+    let output = run(&[
         "inspect",
         "018f2c0b-6c5b-7d2e-8f4a-123456789abc",
         "--kind",
         "uuid",
-        "--output",
-        "json",
     ]);
-    assert!(uuid.status.success());
-
-    let wrong_ulid_kind = run(&[
-        "inspect",
-        "018f2c0b-6c5b-7d2e-8f4a-123456789abc",
-        "--kind",
-        "ulid",
-        "--output",
-        "json",
-    ]);
-    assert_eq!(wrong_ulid_kind.status.code(), Some(1));
-    let wrong_uuid_kind = run(&[
-        "inspect",
-        "01ARZ3NDEKTSV4RRFFQ69G5FAV",
-        "--kind",
-        "uuid",
-        "--output",
-        "json",
-    ]);
-    assert_eq!(wrong_uuid_kind.status.code(), Some(1));
+    assert_eq!(output.status.code(), Some(2));
+    assert!(
+        String::from_utf8(output.stderr)
+            .unwrap()
+            .contains("unexpected argument '--kind'")
+    );
 }

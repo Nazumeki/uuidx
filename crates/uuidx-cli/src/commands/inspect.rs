@@ -1,5 +1,5 @@
 use crate::{
-    cli::{InspectArgs, InspectKindArg},
+    cli::InspectArgs,
     errors::CliError,
     input,
     output::{Output, OutputWriter},
@@ -14,12 +14,11 @@ where
     WErr: OutputWriter,
 {
     let fail_fast = args.input.fail_fast;
-    let kind = args.kind;
     let redact_sensitive = args.redact_sensitive;
     let show_layout = args.layout;
     let summary =
         input::for_each_record(&args.input, fail_fast, |index, value| {
-            match inspect_value(kind, value) {
+            match inspect_value(value) {
                 Ok(InspectionValue::Uuid(uuid)) => {
                     output.inspected_uuid(index, value, &uuid, redact_sensitive, show_layout)?;
                     Ok(false)
@@ -44,30 +43,15 @@ enum InspectionValue {
     Ulid(uuidx_core::UlidInspection),
 }
 
-fn inspect_value(kind: InspectKindArg, value: &str) -> Result<InspectionValue, String> {
-    match kind {
-        InspectKindArg::Uuid => uuidx_core::parse_uuid(value)
-            .map(|uuid| InspectionValue::Uuid(uuidx_core::inspect_uuid(&uuid)))
-            .map_err(|error| error.to_string()),
-        #[cfg(feature = "ulid-inspect")]
-        InspectKindArg::Ulid => uuidx_core::inspect_ulid(value)
-            .map(InspectionValue::Ulid)
-            .map_err(|error| error.to_string()),
-        #[cfg(not(feature = "ulid-inspect"))]
-        InspectKindArg::Ulid => {
-            Err("ULID inspection support was disabled at build time".to_owned())
-        }
-        InspectKindArg::Auto => {
-            if let Ok(uuid) = uuidx_core::parse_uuid(value) {
-                return Ok(InspectionValue::Uuid(uuidx_core::inspect_uuid(&uuid)));
-            }
-            #[cfg(feature = "ulid-inspect")]
-            if let Ok(ulid) = uuidx_core::inspect_ulid(value) {
-                return Ok(InspectionValue::Ulid(ulid));
-            }
-            Err("input is neither a valid UUID nor a supported ULID".to_owned())
-        }
+fn inspect_value(value: &str) -> Result<InspectionValue, String> {
+    if let Ok(uuid) = uuidx_core::parse_uuid(value) {
+        return Ok(InspectionValue::Uuid(uuidx_core::inspect_uuid(&uuid)));
     }
+    #[cfg(feature = "ulid-inspect")]
+    if let Ok(ulid) = uuidx_core::inspect_ulid(value) {
+        return Ok(InspectionValue::Ulid(ulid));
+    }
+    Err("input is neither a valid UUID nor a supported ULID".to_owned())
 }
 
 #[cfg(test)]
@@ -78,39 +62,17 @@ mod tests {
     const UUID: &str = "018f2c0b-6c5b-7d2e-8f4a-123456789abc";
 
     #[test]
-    fn inspect_value_supports_uuid_modes_and_rejects_invalid_input() {
-        assert!(matches!(
-            inspect_value(InspectKindArg::Uuid, UUID),
-            Ok(InspectionValue::Uuid(_))
-        ));
-        assert!(matches!(
-            inspect_value(InspectKindArg::Auto, UUID),
-            Ok(InspectionValue::Uuid(_))
-        ));
-        assert!(inspect_value(InspectKindArg::Uuid, "not-a-uuid").is_err());
-        assert!(inspect_value(InspectKindArg::Auto, "not-an-identifier").is_err());
+    fn inspect_value_recognizes_uuids_and_rejects_invalid_input() {
+        assert!(matches!(inspect_value(UUID), Ok(InspectionValue::Uuid(_))));
+        assert!(inspect_value("not-an-identifier").is_err());
     }
 
     #[cfg(feature = "ulid-inspect")]
     #[test]
-    fn inspect_value_supports_ulid_mode() {
+    fn inspect_value_recognizes_ulids() {
         assert!(matches!(
-            inspect_value(InspectKindArg::Ulid, "01ARZ3NDEKTSV4RRFFQ69G5FAV"),
+            inspect_value("01ARZ3NDEKTSV4RRFFQ69G5FAV"),
             Ok(InspectionValue::Ulid(_))
-        ));
-        assert!(matches!(
-            inspect_value(InspectKindArg::Auto, "01ARZ3NDEKTSV4RRFFQ69G5FAV"),
-            Ok(InspectionValue::Ulid(_))
-        ));
-        assert!(inspect_value(InspectKindArg::Ulid, "not-a-ulid").is_err());
-    }
-
-    #[cfg(not(feature = "ulid-inspect"))]
-    #[test]
-    fn inspect_value_explains_disabled_ulid_support() {
-        assert!(matches!(
-            inspect_value(InspectKindArg::Ulid, "01ARZ3NDEKTSV4RRFFQ69G5FAV"),
-            Err(message) if message.contains("disabled")
         ));
     }
 
@@ -122,7 +84,6 @@ mod tests {
                 input: None,
                 fail_fast: false,
             },
-            kind: InspectKindArg::Auto,
             layout: false,
             redact_sensitive: false,
         };
@@ -144,7 +105,6 @@ mod tests {
                 input: None,
                 fail_fast: false,
             },
-            kind: InspectKindArg::Uuid,
             layout: false,
             redact_sensitive: false,
         };
@@ -161,7 +121,6 @@ mod tests {
                 input: None,
                 fail_fast: false,
             },
-            kind: InspectKindArg::Auto,
             layout: false,
             redact_sensitive: false,
         };
@@ -183,7 +142,6 @@ mod tests {
                     input: None,
                     fail_fast: false,
                 },
-                kind: InspectKindArg::Ulid,
                 layout: false,
                 redact_sensitive: false,
             };

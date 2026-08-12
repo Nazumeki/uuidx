@@ -41,8 +41,8 @@ where
 mod tests {
     use super::*;
     use crate::cli::{
-        Command, ConvertArgs, GenerateArgs, GlobalOptions, InputArgs, InspectArgs, InspectKindArg,
-        OutputModeArg, UuidFormatArg, ValidateArgs,
+        Command, ConvertArgs, GenerateArgs, GlobalOptions, InputArgs, InspectArgs, OutputModeArg,
+        UuidFormatArg, ValidateArgs,
     };
     use crate::errors::CliError;
 
@@ -89,7 +89,6 @@ mod tests {
         assert!(matches!(
             run_silent(cli(Command::Inspect(InspectArgs {
                 input: input(&[UUID]),
-                kind: InspectKindArg::Uuid,
                 layout: false,
                 redact_sensitive: false,
             }))),
