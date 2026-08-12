@@ -226,13 +226,12 @@ output also reports field offsets, widths, and hexadecimal values. JSON output
 always contains its structured `fields` array; `--layout` only changes the
 pretty renderer.
 
-| Option                     | Description                                                                 |
-| -------------------------- | --------------------------------------------------------------------------- |
-| `-k`, `--kind <KIND>`      | `auto`, `uuid`, or `ulid`. `auto` tries UUID first, then ULID when enabled. |
-| `-L`, `--layout`           | Add bit offsets and values to pretty output.                                |
-| `-r`, `--redact-sensitive` | Omit time-based node ID bytes while keeping the node classification.        |
-| `-f`, `--fail-fast`        | Stop after the first invalid input record.                                  |
-| `-i`, `--input <FILE>`     | Read one value per line from a file instead of positional input.            |
+| Option                     | Description                                                          |
+| -------------------------- | -------------------------------------------------------------------- |
+| `-L`, `--layout`           | Add bit offsets and values to pretty output.                         |
+| `-r`, `--redact-sensitive` | Omit time-based node ID bytes while keeping the node classification. |
+| `-f`, `--fail-fast`        | Stop after the first invalid input record.                           |
+| `-i`, `--input <FILE>`     | Read one value per line from a file instead of positional input.     |
 
 Examples:
 
@@ -240,7 +239,7 @@ Examples:
 uuidx inspect 018f2c0b-6c5b-7d2e-8f4a-123456789abc
 uuidx inspect 11111111-1111-6111-9111-111111111111 \
   --redact-sensitive --output json
-uuidx inspect 01ARZ3NDEKTSV4RRFFQ69G5FAV --kind ulid --output json
+uuidx inspect 01ARZ3NDEKTSV4RRFFQ69G5FAV --output json
 ```
 
 ULID inspection is read-only compatibility support. ULID records have
