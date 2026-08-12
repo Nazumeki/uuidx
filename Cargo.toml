@@ -2,6 +2,8 @@
 members = [
     "crates/uuidx-core",
     "crates/uuidx-cli",
+    "crates/uuidx-wasm",
+    "crates/uuidx-ffi",
 ]
 resolver = "3"
 

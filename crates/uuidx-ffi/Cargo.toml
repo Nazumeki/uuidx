@@ -1,0 +1,15 @@
+[package]
+name = "uuidx-ffi"
+version.workspace = true
+description = "Stable C interface for uuidx UUID operations"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+readme.workspace = true
+repository.workspace = true
+
+[lib]
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[dependencies]
+uuidx-core.workspace = true

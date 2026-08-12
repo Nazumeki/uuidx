@@ -18,6 +18,16 @@ test-core:
 test-cli:
     cargo test -p uuidx-cli --all-features
 
+test-wasm:
+    cargo test -p uuidx-wasm --all-features
+
+test-wasm-target:
+    WASM_BINDGEN_BENCH_RESULT=target/wbg_benchmark.json cargo test --locked -p uuidx-wasm --target wasm32-unknown-unknown --all-features
+    WASM_BINDGEN_BENCH_RESULT=target/wbg_benchmark.json cargo test --locked -p uuidx-wasm --target wasm32-unknown-unknown --no-default-features
+
+test-ffi:
+    cargo test -p uuidx-ffi --all-features
+
 test-all: test test-min
 
 lint:
@@ -32,14 +42,29 @@ build:
 build-min:
     cargo build --release -p uuidx-cli --no-default-features
 
+build-wasm:
+    cargo build --locked -p uuidx-wasm --target wasm32-unknown-unknown --all-features
+
+build-wasm-min:
+    cargo build --locked -p uuidx-wasm --target wasm32-unknown-unknown --no-default-features
+
+build-ffi:
+    cargo build --release -p uuidx-ffi --all-features
+
 doc:
     cargo doc --workspace --all-features --no-deps
 
 coverage:
-    cargo llvm-cov --workspace --all-features --html
+    cargo llvm-cov clean --workspace
+    cargo llvm-cov --workspace --all-features --no-report
+    cargo llvm-cov --workspace --no-default-features --no-report
+    cargo llvm-cov report --fail-under-lines 97 --fail-under-functions 96 --fail-under-regions 96 --html
 
 coverage-lcov:
-    cargo llvm-cov --workspace --all-features --lcov --output-path target/coverage/lcov.info
+    cargo llvm-cov clean --workspace
+    cargo llvm-cov --workspace --all-features --no-report
+    cargo llvm-cov --workspace --no-default-features --no-report
+    cargo llvm-cov report --fail-under-lines 97 --fail-under-functions 96 --fail-under-regions 96 --lcov --output-path target/coverage/lcov.info
 
 smoke:
     cargo run --quiet -p uuidx-cli --all-features -- generate v4 --output plain
@@ -47,4 +72,4 @@ smoke:
 
 check: fmt-check test-all lint lint-min
 
-ci: check build build-min
+ci: check test-wasm-target build build-min build-wasm build-wasm-min build-ffi
