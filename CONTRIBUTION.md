@@ -264,7 +264,8 @@ just coverage-lcov
 
 The coverage recipes merge the all-features and no-default-features host test
 profiles. They enforce workspace floors of 97% for lines and 96% for functions
-and regions. The report excludes doctests; `just test-wasm-target` separately
+and regions. The report excludes doctests and the target-only
+`uuidx-wasm/src/lib.rs` export boundary; `just test-wasm-target` separately
 executes the WebAssembly exports under Node.
 
 ### Test expectations by change type

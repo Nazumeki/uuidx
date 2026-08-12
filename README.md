@@ -625,8 +625,9 @@ just coverage-lcov
 
 Both recipes merge the all-features and no-default-features host test profiles
 and enforce workspace floors of 97% line coverage, 96% function coverage, and
-96% region coverage. These reports do not include doctests; WebAssembly export
-behavior is checked separately under Node by `just test-wasm-target`.
+96% region coverage. These reports exclude doctests and the target-only
+`uuidx-wasm/src/lib.rs` export boundary; WebAssembly export behavior is checked
+separately under Node by `just test-wasm-target`.
 
 ## Automation and releases
 

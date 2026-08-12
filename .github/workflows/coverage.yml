@@ -59,11 +59,16 @@ jobs:
       - name: Enforce coverage thresholds
         run: >-
           cargo llvm-cov report
+          --ignore-filename-regex 'uuidx-wasm[/\\]src[/\\]lib\.rs$'
           --fail-under-lines 97
           --fail-under-functions 96
           --fail-under-regions 96
       - name: Generate LCOV report
-        run: cargo llvm-cov report --lcov --output-path target/coverage/lcov.info
+        run: >-
+          cargo llvm-cov report
+          --ignore-filename-regex 'uuidx-wasm[/\\]src[/\\]lib\.rs$'
+          --lcov
+          --output-path target/coverage/lcov.info
       - name: Test WebAssembly exports
         env:
           WASM_BINDGEN_BENCH_RESULT: target/wbg_benchmark.json
