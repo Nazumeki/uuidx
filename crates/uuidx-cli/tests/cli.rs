@@ -354,6 +354,9 @@ fn pretty_output_is_compact_and_machine_output_is_ansi_free() {
     assert!(!pretty_text.contains('\u{1b}'));
     assert!(!pretty_text.contains('┌'));
     assert!(!pretty_text.contains('│'));
+    assert!(pretty_text.contains("timestamp"));
+    assert!(!pretty_text.contains("unix_millis"));
+    assert!(!pretty_text.contains("bytes"));
     assert!(!pretty_text.contains("Bit layout"));
 
     let detailed = run(&[
@@ -364,11 +367,12 @@ fn pretty_output_is_compact_and_machine_output_is_ansi_free() {
         "--layout",
     ]);
     assert!(detailed.status.success());
-    assert!(
-        String::from_utf8(detailed.stdout)
-            .expect("detailed output should be UTF-8")
-            .contains("Bit layout")
-    );
+    let detailed_text =
+        String::from_utf8(detailed.stdout).expect("detailed output should be UTF-8");
+    assert!(detailed_text.contains("Details"));
+    assert!(detailed_text.contains("bytes"));
+    assert!(detailed_text.contains("unix_millis"));
+    assert!(detailed_text.contains("Bit layout"));
 
     let json = run(&[
         "inspect",
@@ -439,7 +443,8 @@ fn pretty_inspection_contains_semantic_sections() {
         let mut fields = line.split_whitespace();
         fields.next() == Some("format") && fields.next() == Some("canonical")
     }));
-    assert!(text.contains("unix_millis"));
+    assert!(text.contains("timestamp"));
+    assert!(!text.contains("unix_millis"));
     assert!(!text.contains("Bit layout"));
 }
 
@@ -637,9 +642,7 @@ fn help_lists_the_user_facing_commands() {
     assert!(help.contains("validate"));
     assert!(help.contains("convert"));
     assert!(help.contains("generate  Generate UUID v3-v8 values [alias: g]"));
-    assert!(help.contains(
-        "inspect   Inspect UUIDs and optionally recognize ULIDs in read-only mode [alias: i]"
-    ));
+    assert!(help.contains("inspect   Inspect UUID, ULID, NanoID, and Snowflake values [alias: i]"));
     assert!(help.contains("validate  Validate UUID syntax and version structure [alias: v]"));
     assert!(
         help.contains("convert   Convert UUID text between standard textual formats [alias: c]")
@@ -694,13 +697,58 @@ fn command_help_explains_scoped_options_and_formats() {
 
 #[cfg(feature = "ulid-inspect")]
 #[test]
-fn inspect_recognizes_ulid_without_converting_it() {
+fn inspect_recognizes_ulid_without_annotations() {
     let output = run(&["inspect", "01ARZ3NDEKTSV4RRFFQ69G5FAV", "--output", "json"]);
     assert!(output.status.success());
     let record: Value = serde_json::from_slice(&output.stdout).expect("ULID JSON should parse");
     assert_eq!(record["kind"], "ulid");
     assert_eq!(record["metadata"]["type"], "ulid");
-    assert_eq!(record["warnings"][0], "ULID support is inspection-only");
+    assert!(record["warnings"].is_null());
+}
+
+#[test]
+fn inspect_recognizes_nanoid_and_snowflake_without_annotations() {
+    let nanoid = run(&["inspect", "V1StGXR8_Z5jdHi6B-myT", "--output", "json"]);
+    assert!(nanoid.status.success());
+    let record: Value = serde_json::from_slice(&nanoid.stdout).expect("NanoID JSON should parse");
+    assert_eq!(record["kind"], "nanoid");
+    assert_eq!(record["metadata"]["length"], 21);
+    assert_eq!(record["metadata"]["entropy_bits"], 126);
+    assert!(record["warnings"].is_null());
+
+    let snowflake = run(&["inspect", "1724552287438348288", "--output", "json"]);
+    assert!(snowflake.status.success());
+    let record: Value =
+        serde_json::from_slice(&snowflake.stdout).expect("Snowflake JSON should parse");
+    assert_eq!(record["kind"], "snowflake");
+    assert_eq!(record["metadata"]["epoch"], "twitter");
+    assert!(record["metadata"]["timestamp_ms"].is_number());
+    assert!(record["warnings"].is_null());
+}
+
+#[test]
+fn inspect_layout_adds_details_for_non_uuid_identifiers() {
+    let cases = [
+        ("V1StGXR8_Z5jdHi6B-myT", "entropy_bits", None),
+        ("1724552287438348288", "datacenter_id", Some("Bit layout")),
+    ];
+
+    for (input, detail, layout) in cases {
+        let summary = run(&["inspect", input, "--output", "pretty"]);
+        assert!(summary.status.success());
+        let summary = String::from_utf8(summary.stdout).unwrap();
+        assert!(!summary.contains(detail));
+        assert!(!summary.contains("profile"));
+        assert!(!summary.contains("status"));
+
+        let detailed = run(&["inspect", input, "--output", "pretty", "--layout"]);
+        assert!(detailed.status.success());
+        let detailed = String::from_utf8(detailed.stdout).unwrap();
+        assert!(detailed.contains(detail));
+        if let Some(layout) = layout {
+            assert!(detailed.contains(layout));
+        }
+    }
 }
 
 #[test]

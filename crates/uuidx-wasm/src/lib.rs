@@ -51,10 +51,28 @@ pub fn inspect_uuid(input: &str) -> Result<JsValue, JsValue> {
     to_js_value(&inspection)
 }
 
+#[wasm_bindgen(js_name = inspectIdentifier, skip_typescript)]
+pub fn inspect_identifier(input: &str) -> Result<JsValue, JsValue> {
+    let inspection = inspection::inspect_identifier(input).map_err(ApiError::into_js)?;
+    to_js_value(&inspection)
+}
+
 #[cfg(feature = "ulid-inspect")]
 #[wasm_bindgen(js_name = inspectUlid, skip_typescript)]
 pub fn inspect_ulid(input: &str) -> Result<JsValue, JsValue> {
     let inspection = inspection::inspect_ulid(input).map_err(ApiError::into_js)?;
+    to_js_value(&inspection)
+}
+
+#[wasm_bindgen(js_name = inspectNanoid, skip_typescript)]
+pub fn inspect_nanoid(input: &str) -> Result<JsValue, JsValue> {
+    let inspection = inspection::inspect_nanoid(input).map_err(ApiError::into_js)?;
+    to_js_value(&inspection)
+}
+
+#[wasm_bindgen(js_name = inspectSnowflake, skip_typescript)]
+pub fn inspect_snowflake(input: &str) -> Result<JsValue, JsValue> {
+    let inspection = inspection::inspect_snowflake(input).map_err(ApiError::into_js)?;
     to_js_value(&inspection)
 }
 
@@ -120,10 +138,31 @@ export interface UuidInspection {
   metadata: UuidMetadata;
 }
 
+export interface NanoidInspection {
+  kind: "nanoid";
+  value: string;
+  length: number;
+  alphabet: "A-Za-z0-9_-";
+  entropyBits: number;
+}
+
+export interface SnowflakeInspection {
+  kind: "snowflake";
+  value: string;
+  epoch: "twitter";
+  epochMs: number;
+  timestampMs: number;
+  datacenterId: number;
+  workerId: number;
+  sequence: number;
+}
+
 export function generateUuid(version: UuidVersion | string, options?: GenerationOptions): string;
 export function validateUuid(input: string): boolean;
 export function formatUuid(input: string, format: UuidFormat | string): string;
 export function inspectUuid(input: string): UuidInspection;
+export function inspectNanoid(input: string): NanoidInspection;
+export function inspectSnowflake(input: string): SnowflakeInspection;
 "#;
 
 #[cfg(feature = "ulid-inspect")]
@@ -138,6 +177,29 @@ export interface UlidInspection {
 }
 
 export function inspectUlid(input: string): UlidInspection;
+"#;
+
+#[cfg(feature = "ulid-inspect")]
+#[wasm_bindgen(typescript_custom_section)]
+const IDENTIFIER_TYPES: &str = r#"
+export type IdentifierInspection =
+  | UuidInspection
+  | UlidInspection
+  | NanoidInspection
+  | SnowflakeInspection;
+
+export function inspectIdentifier(input: string): IdentifierInspection;
+"#;
+
+#[cfg(not(feature = "ulid-inspect"))]
+#[wasm_bindgen(typescript_custom_section)]
+const IDENTIFIER_TYPES: &str = r#"
+export type IdentifierInspection =
+  | UuidInspection
+  | NanoidInspection
+  | SnowflakeInspection;
+
+export function inspectIdentifier(input: string): IdentifierInspection;
 "#;
 
 #[cfg(test)]
@@ -283,6 +345,30 @@ mod wasm_tests {
         );
 
         assert_error_code(inspect_ulid("not-a-ulid").unwrap_err(), "invalid_ulid");
+    }
+
+    #[wasm_bindgen_test]
+    fn identifier_inspection_detects_nanoid_and_snowflake() {
+        for (input, expected) in [
+            ("V1StGXR8_Z5jdHi6B-myT", "nanoid"),
+            ("1724552287438348288", "snowflake"),
+        ] {
+            let inspection = inspect_identifier(input).unwrap();
+            assert_eq!(
+                Reflect::get(&inspection, &JsValue::from_str("kind"))
+                    .unwrap()
+                    .as_string()
+                    .as_deref(),
+                Some(expected)
+            );
+        }
+
+        assert_error_code(
+            inspect_identifier("not-an-identifier").unwrap_err(),
+            "invalid_identifier",
+        );
+        assert_error_code(inspect_nanoid("bad").unwrap_err(), "invalid_nanoid");
+        assert_error_code(inspect_snowflake("bad").unwrap_err(), "invalid_snowflake");
     }
 
     #[wasm_bindgen_test]

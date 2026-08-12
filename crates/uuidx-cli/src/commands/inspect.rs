@@ -16,42 +16,38 @@ where
     let fail_fast = args.input.fail_fast;
     let redact_sensitive = args.redact_sensitive;
     let show_layout = args.layout;
-    let summary =
-        input::for_each_record(&args.input, fail_fast, |index, value| {
-            match inspect_value(value) {
-                Ok(InspectionValue::Uuid(uuid)) => {
-                    output.inspected_uuid(index, value, &uuid, redact_sensitive, show_layout)?;
-                    Ok(false)
-                }
-                #[cfg(feature = "ulid-inspect")]
-                Ok(InspectionValue::Ulid(ulid)) => {
-                    output.inspected_ulid(index, value, &ulid)?;
-                    Ok(false)
-                }
-                Err(error) => {
-                    output.record_error("inspect", index, value, "invalid_identifier", &error)?;
-                    Ok(true)
-                }
+    let summary = input::for_each_record(&args.input, fail_fast, |index, value| {
+        match uuidx_core::inspect_identifier(value) {
+            Ok(uuidx_core::IdentifierInspection::Uuid(uuid)) => {
+                output.inspected_uuid(index, value, &uuid, redact_sensitive, show_layout)?;
+                Ok(false)
             }
-        })?;
+            #[cfg(feature = "ulid-inspect")]
+            Ok(uuidx_core::IdentifierInspection::Ulid(ulid)) => {
+                output.inspected_ulid(index, value, &ulid, show_layout)?;
+                Ok(false)
+            }
+            Ok(uuidx_core::IdentifierInspection::Nanoid(nanoid)) => {
+                output.inspected_nanoid(index, value, &nanoid, show_layout)?;
+                Ok(false)
+            }
+            Ok(uuidx_core::IdentifierInspection::Snowflake(snowflake)) => {
+                output.inspected_snowflake(index, value, &snowflake, show_layout)?;
+                Ok(false)
+            }
+            Err(error) => {
+                output.record_error(
+                    "inspect",
+                    index,
+                    value,
+                    "invalid_identifier",
+                    &error.to_string(),
+                )?;
+                Ok(true)
+            }
+        }
+    })?;
     Ok(summary.data_errors)
-}
-
-enum InspectionValue {
-    Uuid(uuidx_core::UuidInspection),
-    #[cfg(feature = "ulid-inspect")]
-    Ulid(uuidx_core::UlidInspection),
-}
-
-fn inspect_value(value: &str) -> Result<InspectionValue, String> {
-    if let Ok(uuid) = uuidx_core::parse_uuid(value) {
-        return Ok(InspectionValue::Uuid(uuidx_core::inspect_uuid(&uuid)));
-    }
-    #[cfg(feature = "ulid-inspect")]
-    if let Ok(ulid) = uuidx_core::inspect_ulid(value) {
-        return Ok(InspectionValue::Ulid(ulid));
-    }
-    Err("input is neither a valid UUID nor a supported ULID".to_owned())
 }
 
 #[cfg(test)]
@@ -63,16 +59,31 @@ mod tests {
 
     #[test]
     fn inspect_value_recognizes_uuids_and_rejects_invalid_input() {
-        assert!(matches!(inspect_value(UUID), Ok(InspectionValue::Uuid(_))));
-        assert!(inspect_value("not-an-identifier").is_err());
+        assert!(matches!(
+            uuidx_core::inspect_identifier(UUID),
+            Ok(uuidx_core::IdentifierInspection::Uuid(_))
+        ));
+        assert!(uuidx_core::inspect_identifier("not-an-identifier").is_err());
     }
 
     #[cfg(feature = "ulid-inspect")]
     #[test]
     fn inspect_value_recognizes_ulids() {
         assert!(matches!(
-            inspect_value("01ARZ3NDEKTSV4RRFFQ69G5FAV"),
-            Ok(InspectionValue::Ulid(_))
+            uuidx_core::inspect_identifier("01ARZ3NDEKTSV4RRFFQ69G5FAV"),
+            Ok(uuidx_core::IdentifierInspection::Ulid(_))
+        ));
+    }
+
+    #[test]
+    fn inspect_value_recognizes_nanoids_and_snowflakes() {
+        assert!(matches!(
+            uuidx_core::inspect_identifier("V1StGXR8_Z5jdHi6B-myT"),
+            Ok(uuidx_core::IdentifierInspection::Nanoid(_))
+        ));
+        assert!(matches!(
+            uuidx_core::inspect_identifier("1724552287438348288"),
+            Ok(uuidx_core::IdentifierInspection::Snowflake(_))
         ));
     }
 

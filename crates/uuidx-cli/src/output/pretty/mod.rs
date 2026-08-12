@@ -5,7 +5,6 @@ use uuidx_core::{Uuid, UuidInspection, UuidOutputFormat};
 
 use self::theme::{error, heading, label, success, version_tag, warning};
 
-#[cfg(feature = "ulid-inspect")]
 use self::theme::dim;
 
 pub fn generated(index: u64, value: &str, version: &str, warnings: &[String]) -> String {
@@ -32,9 +31,13 @@ pub fn inspection(
     let mut output = format!(
         "{}\n{}",
         heading(&format!("UUID inspection #{index}")),
-        sections::summary(input, inspection, redact_sensitive),
+        sections::summary(input, inspection),
     );
     if show_layout {
+        output.push_str(&format!(
+            "\n{}",
+            sections::details(inspection, redact_sensitive)
+        ));
         output.push_str(&format!("\n{}", sections::layout(&inspection.fields)));
     }
     if let Some(warning_text) = inspection_warning(inspection) {
@@ -44,21 +47,98 @@ pub fn inspection(
 }
 
 #[cfg(feature = "ulid-inspect")]
-pub fn ulid_inspection(index: u64, input: &str, inspection: &uuidx_core::UlidInspection) -> String {
-    format!(
-        "{}\n{} {}\n{} {}\n{} {}\n{} {}\n{} {}",
+pub fn ulid_inspection(
+    index: u64,
+    input: &str,
+    inspection: &uuidx_core::UlidInspection,
+    show_layout: bool,
+) -> String {
+    let mut output = format!(
+        "{}\n{}",
         heading(&format!("ULID inspection #{index}")),
-        label("input"),
-        input,
-        label("normalized"),
-        success(&inspection.normalized),
-        label("timestamp_ms"),
-        inspection.timestamp_ms,
-        label("random"),
-        dim(&format!("0x{:020x}", inspection.random)),
-        warning("status"),
-        "inspection-only compatibility",
-    )
+        sections::identifier_summary(
+            input,
+            &inspection.normalized,
+            &[(
+                "timestamp",
+                sections::format_unix_millis(inspection.timestamp_ms),
+            )],
+        ),
+    );
+    if show_layout {
+        output.push_str(&format!(
+            "\n{}",
+            sections::identifier_details(&[
+                ("bytes", dim(&hex::encode(inspection.bytes))),
+                ("timestamp_ms", inspection.timestamp_ms.to_string()),
+                ("random", dim(&format!("0x{:020x}", inspection.random))),
+            ]),
+        ));
+        output.push_str(&format!("\n{}", sections::layout(&inspection.fields)));
+    }
+    output
+}
+
+pub fn nanoid_inspection(
+    index: u64,
+    input: &str,
+    inspection: &uuidx_core::NanoidInspection,
+    show_layout: bool,
+) -> String {
+    let mut output = format!(
+        "{}\n{}",
+        heading(&format!("NanoID inspection #{index}")),
+        sections::identifier_summary(
+            input,
+            &inspection.normalized,
+            &[("length", inspection.length.to_string())],
+        ),
+    );
+    if show_layout {
+        output.push_str(&format!(
+            "\n{}",
+            sections::identifier_details(&[
+                ("alphabet", dim(inspection.alphabet)),
+                ("entropy_bits", inspection.entropy_bits.to_string()),
+            ]),
+        ));
+    }
+    output
+}
+
+pub fn snowflake_inspection(
+    index: u64,
+    input: &str,
+    inspection: &uuidx_core::SnowflakeInspection,
+    show_layout: bool,
+) -> String {
+    let mut output = format!(
+        "{}\n{}",
+        heading(&format!("Snowflake inspection #{index}")),
+        sections::identifier_summary(
+            input,
+            &inspection.normalized,
+            &[(
+                "timestamp",
+                sections::format_unix_millis(inspection.timestamp_ms),
+            )],
+        ),
+    );
+    if show_layout {
+        output.push_str(&format!(
+            "\n{}",
+            sections::identifier_details(&[
+                ("value_hex", dim(&format!("0x{:016x}", inspection.value))),
+                ("timestamp_ms", inspection.timestamp_ms.to_string()),
+                ("epoch_ms", inspection.epoch_ms.to_string()),
+                ("datacenter_id", inspection.datacenter_id.to_string()),
+                ("worker_id", inspection.worker_id.to_string()),
+                ("sequence", inspection.sequence.to_string()),
+            ]),
+        ));
+        output.push_str(&format!("\n{}", sections::layout(&inspection.fields)));
+    }
+    output
 }
 
 pub fn converted(index: u64, input: &str, value: &str, format: UuidOutputFormat) -> String {
@@ -94,10 +174,10 @@ pub fn top_level_error(message: &str) -> String {
 fn inspection_warning(inspection: &UuidInspection) -> Option<&'static str> {
     match inspection.version {
         uuidx_core::InspectableUuidVersion::V1 => {
-            Some("UUID v1 exposes timestamp and node metadata; generation is disabled.")
+            Some("UUID v1 exposes timestamp and node metadata.")
         }
         uuidx_core::InspectableUuidVersion::V2 => {
-            Some("UUID v2 DCE Security semantics are outside RFC 9562; generation is disabled.")
+            Some("UUID v2 DCE Security semantics are outside RFC 9562.")
         }
         uuidx_core::InspectableUuidVersion::V3 => Some("UUID v3 uses legacy MD5 name hashing."),
         uuidx_core::InspectableUuidVersion::V5 => Some("UUID v5 uses legacy SHA-1 name hashing."),
@@ -162,10 +242,43 @@ mod tests {
 
     #[cfg(feature = "ulid-inspect")]
     #[test]
-    fn ulid_renderer_marks_read_only_compatibility() {
+    fn ulid_renderer_separates_summary_from_layout() {
         let inspected = uuidx_core::inspect_ulid("01ARZ3NDEKTSV4RRFFQ69G5FAV").unwrap();
-        let output = ulid_inspection(4, &inspected.normalized, &inspected);
-        assert!(output.contains("ULID inspection #4"));
-        assert!(output.contains("inspection-only compatibility"));
+        let summary = ulid_inspection(4, &inspected.normalized, &inspected, false);
+        assert!(summary.contains("ULID inspection #4"));
+        assert!(summary.contains("timestamp"));
+        assert!(!summary.contains("timestamp_ms"));
+        assert!(!summary.contains("Bit layout"));
+        assert!(!summary.contains("status"));
+
+        let layout = ulid_inspection(4, &inspected.normalized, &inspected, true);
+        assert!(layout.contains("timestamp_ms"));
+        assert!(layout.contains("random"));
+        assert!(layout.contains("Bit layout"));
+    }
+
+    #[test]
+    fn nanoid_and_snowflake_renderers_separate_summary_from_layout() {
+        let nanoid = uuidx_core::inspect_nanoid("V1StGXR8_Z5jdHi6B-myT").unwrap();
+        let summary = nanoid_inspection(5, &nanoid.normalized, &nanoid, false);
+        assert!(summary.contains("NanoID inspection #5"));
+        assert!(summary.contains("length"));
+        assert!(!summary.contains("entropy_bits"));
+        assert!(!summary.contains("profile"));
+        let layout = nanoid_inspection(5, &nanoid.normalized, &nanoid, true);
+        assert!(layout.contains("alphabet"));
+        assert!(layout.contains("entropy_bits"));
+
+        let snowflake = uuidx_core::inspect_snowflake("1724552287438348288").unwrap();
+        let summary = snowflake_inspection(6, &snowflake.normalized, &snowflake, false);
+        assert!(summary.contains("Snowflake inspection #6"));
+        assert!(summary.contains("timestamp"));
+        assert!(!summary.contains("datacenter_id"));
+        assert!(!summary.contains("profile"));
+        let layout = snowflake_inspection(6, &snowflake.normalized, &snowflake, true);
+        assert!(layout.contains("datacenter_id"));
+        assert!(layout.contains("worker_id"));
+        assert!(layout.contains("sequence"));
+        assert!(layout.contains("Bit layout"));
     }
 }

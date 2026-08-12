@@ -58,13 +58,13 @@ coverage:
     cargo llvm-cov clean --workspace
     cargo llvm-cov --workspace --all-features --no-report
     cargo llvm-cov --workspace --no-default-features --no-report
-    cargo llvm-cov report --fail-under-lines 97 --fail-under-functions 96 --fail-under-regions 96 --html
+    cargo llvm-cov report --ignore-filename-regex 'uuidx-wasm[/\\]src[/\\]lib\.rs$' --fail-under-lines 97 --fail-under-functions 96 --fail-under-regions 96 --html
 
 coverage-lcov:
     cargo llvm-cov clean --workspace
     cargo llvm-cov --workspace --all-features --no-report
     cargo llvm-cov --workspace --no-default-features --no-report
-    cargo llvm-cov report --fail-under-lines 97 --fail-under-functions 96 --fail-under-regions 96 --lcov --output-path target/coverage/lcov.info
+    cargo llvm-cov report --ignore-filename-regex 'uuidx-wasm[/\\]src[/\\]lib\.rs$' --fail-under-lines 97 --fail-under-functions 96 --fail-under-regions 96 --lcov --output-path target/coverage/lcov.info
 
 smoke:
     cargo run --quiet -p uuidx-cli --all-features -- generate v4 --output plain

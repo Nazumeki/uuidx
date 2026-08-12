@@ -106,15 +106,61 @@ where
         index: u64,
         input: &str,
         inspection: &uuidx_core::UlidInspection,
+        show_layout: bool,
     ) -> Result<(), CliError> {
         match self.mode {
             RenderMode::Plain => self.write_stdout(&plain::value(&inspection.normalized)),
-            RenderMode::Pretty => {
-                self.write_stdout(&pretty::ulid_inspection(index, input, inspection))
-            }
+            RenderMode::Pretty => self.write_stdout(&pretty::ulid_inspection(
+                index,
+                input,
+                inspection,
+                show_layout,
+            )),
             RenderMode::Json => {
                 self.write_json(&json::JsonRecord::ulid_inspection(index, input, inspection))
             }
+        }
+    }
+
+    pub fn inspected_nanoid(
+        &mut self,
+        index: u64,
+        input: &str,
+        inspection: &uuidx_core::NanoidInspection,
+        show_layout: bool,
+    ) -> Result<(), CliError> {
+        match self.mode {
+            RenderMode::Plain => self.write_stdout(&plain::value(&inspection.normalized)),
+            RenderMode::Pretty => self.write_stdout(&pretty::nanoid_inspection(
+                index,
+                input,
+                inspection,
+                show_layout,
+            )),
+            RenderMode::Json => self.write_json(&json::JsonRecord::nanoid_inspection(
+                index, input, inspection,
+            )),
+        }
+    }
+
+    pub fn inspected_snowflake(
+        &mut self,
+        index: u64,
+        input: &str,
+        inspection: &uuidx_core::SnowflakeInspection,
+        show_layout: bool,
+    ) -> Result<(), CliError> {
+        match self.mode {
+            RenderMode::Plain => self.write_stdout(&plain::value(&inspection.normalized)),
+            RenderMode::Pretty => self.write_stdout(&pretty::snowflake_inspection(
+                index,
+                input,
+                inspection,
+                show_layout,
+            )),
+            RenderMode::Json => self.write_json(&json::JsonRecord::snowflake_inspection(
+                index, input, inspection,
+            )),
         }
     }
 
@@ -396,7 +442,26 @@ mod tests {
         ] {
             let mut output = output(mode);
             output
-                .inspected_ulid(0, &inspection.normalized, &inspection)
+                .inspected_ulid(0, &inspection.normalized, &inspection, true)
+                .unwrap();
+        }
+    }
+
+    #[test]
+    fn render_methods_support_nanoid_and_snowflake_inspection() {
+        let nanoid = uuidx_core::inspect_nanoid("V1StGXR8_Z5jdHi6B-myT").unwrap();
+        let snowflake = uuidx_core::inspect_snowflake("1724552287438348288").unwrap();
+        for mode in [
+            OutputModeArg::Plain,
+            OutputModeArg::Pretty,
+            OutputModeArg::Json,
+        ] {
+            let mut output = output(mode);
+            output
+                .inspected_nanoid(0, &nanoid.normalized, &nanoid, true)
+                .unwrap();
+            output
+                .inspected_snowflake(1, &snowflake.normalized, &snowflake, true)
                 .unwrap();
         }
     }
