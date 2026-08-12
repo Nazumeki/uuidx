@@ -1,5 +1,11 @@
 # Architecture
 
+This is the developer reference for crate ownership, dependency direction,
+data flow, and extension boundaries. User installation and source-build
+instructions are in [`INSTALLATION.md`](INSTALLATION.md) and
+[`SOURCEBUILD.md`](SOURCEBUILD.md); contributor workflow is in
+[`CONTRIBUTION.md`](../CONTRIBUTION.md).
+
 `uuidx` is a four-crate workspace with three adapters over one domain crate:
 
 ```text
@@ -16,17 +22,17 @@ implements UUID bit rules.
 
 `crates/uuidx-core/src/` is organized by domain responsibility:
 
-| Module | Responsibility |
-| --- | --- |
-| `types.rs` | Public generation/inspection enums, options, variants, and UUID type exports |
-| `error.rs` | Domain errors for parsing, hex payloads, and generation options |
-| `parse.rs` | UUID text parsing through the `uuid` crate |
-| `format.rs` | Canonical, simple, URN, and braced UUID formats plus fixed-size hex payloads |
-| `generate/` | Version-specific v3-v8 generation modules |
-| `inspect/` | UUID metadata plus automatic identifier-family recognition |
-| `inspect/nanoid.rs` | Standard 21-character NanoID inspection |
-| `inspect/snowflake.rs` | Original Twitter Snowflake decoding |
-| `inspect/ulid.rs` | Optional ULID parsing for read-only inspection |
+| Module                 | Responsibility                                                               |
+| ---------------------- | ---------------------------------------------------------------------------- |
+| `types.rs`             | Public generation/inspection enums, options, variants, and UUID type exports |
+| `error.rs`             | Domain errors for parsing, hex payloads, and generation options              |
+| `parse.rs`             | UUID text parsing through the `uuid` crate                                   |
+| `format.rs`            | Canonical, simple, URN, and braced UUID formats plus fixed-size hex payloads |
+| `generate/`            | Version-specific v3-v8 generation modules                                    |
+| `inspect/`             | UUID metadata plus automatic identifier-family recognition                   |
+| `inspect/nanoid.rs`    | Standard 21-character NanoID inspection                                      |
+| `inspect/snowflake.rs` | Original Twitter Snowflake decoding                                          |
+| `inspect/ulid.rs`      | Optional ULID parsing for read-only inspection                               |
 
 The public generation enum intentionally contains only v3-v8. That makes
 unsupported generation a type-level property rather than a runtime fallback.
@@ -44,16 +50,16 @@ presented.
 
 `crates/uuidx-cli/src/` is split along the command and presentation boundaries:
 
-| Module | Responsibility |
-| --- | --- |
-| `cli/` | Clap argument and subcommand definitions |
-| `commands/` | Generate, inspect, validate, and convert workflows |
-| `input.rs` | Positional, file, piped stdin, blank-line, and fail-fast handling |
-| `output/` | Output mode selection and stream-safe rendering |
+| Module           | Responsibility                                                           |
+| ---------------- | ------------------------------------------------------------------------ |
+| `cli/`           | Clap argument and subcommand definitions                                 |
+| `commands/`      | Generate, inspect, validate, and convert workflows                       |
+| `input.rs`       | Positional, file, piped stdin, blank-line, and fail-fast handling        |
+| `output/`        | Output mode selection and stream-safe rendering                          |
 | `output/pretty/` | Compact colored sections, semantic themes, and human-readable formatting |
-| `output/json.rs` | Stable newline-delimited JSON records |
-| `errors.rs` | Process-level error and exit-status mapping |
-| `app.rs` | Thin command dispatch and flush boundary |
+| `output/json.rs` | Stable newline-delimited JSON records                                    |
+| `errors.rs`      | Process-level error and exit-status mapping                              |
+| `app.rs`         | Thin command dispatch and flush boundary                                 |
 
 Commands produce domain values or domain errors and pass them to `Output`. The
 renderer decides whether the result is plain, pretty, or JSON. This keeps

@@ -78,7 +78,7 @@ crates/uuidx-core/       UUID domain library and core integration tests
 crates/uuidx-cli/        CLI binary, command tests, and presentation layers
 crates/uuidx-wasm/       WebAssembly exports and JavaScript conversion
 crates/uuidx-ffi/        C ABI library and public header
-docs/                    Architecture and JSON contract documentation
+docs/                    User installation/build guides and developer contracts
 justfile                Shared local and CI commands
 ```
 
