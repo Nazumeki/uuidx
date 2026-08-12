@@ -39,11 +39,11 @@ Other targets are not published as release archives; use a source build from
 
 ### Unix-like systems
 
-Set `VERSION` to the release tag you want, such as `v0.1.0`, and set `TARGET`
+Set `VERSION` to the release tag you want, such as `v0.1.1`, and set `TARGET`
 to the target for your machine:
 
 ```console
-VERSION=v0.1.0
+VERSION=v0.1.1
 TARGET=x86_64-unknown-linux-gnu
 ARCHIVE="uuidx-${VERSION}-${TARGET}.tar.gz"
 BASE_URL="https://github.com/Nazumeki/uuidx/releases/download/${VERSION}"
@@ -77,7 +77,7 @@ release workflow publishes `SHA256SUMS` next to every archive.
 Set `VERSION` to the release tag you want. The archive contains `uuidx.exe`.
 
 ```powershell
-$Version = "v0.1.0"
+$Version = "v0.1.1"
 $Target = "x86_64-pc-windows-msvc"
 $Archive = "uuidx-$Version-$Target.zip"
 $BaseUrl = "https://github.com/Nazumeki/uuidx/releases/download/$Version"
@@ -119,7 +119,7 @@ uuidx --version
 To install a specific published version:
 
 ```console
-cargo install uuidx-cli --version 0.1.0 --locked
+cargo install uuidx-cli --version 0.1.1 --locked
 ```
 
 The CLI enables the `ulid-inspect` feature by default. Install a smaller binary
