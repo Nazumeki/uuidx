@@ -215,6 +215,68 @@ fn resolve_color(output: RenderMode) -> ColorChoice {
 }
 
 #[cfg(test)]
+pub(crate) struct TestWriter {
+    fail_write: bool,
+    fail_flush: bool,
+}
+
+#[cfg(test)]
+impl TestWriter {
+    pub(crate) const fn working() -> Self {
+        Self {
+            fail_write: false,
+            fail_flush: false,
+        }
+    }
+
+    pub(crate) const fn failing_write() -> Self {
+        Self {
+            fail_write: true,
+            fail_flush: false,
+        }
+    }
+
+    pub(crate) const fn failing_flush() -> Self {
+        Self {
+            fail_write: false,
+            fail_flush: true,
+        }
+    }
+}
+
+#[cfg(test)]
+impl Write for TestWriter {
+    fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
+        if self.fail_write {
+            Err(io::Error::other("test write failure"))
+        } else {
+            Ok(buffer.len())
+        }
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        if self.fail_flush {
+            Err(io::Error::other("test flush failure"))
+        } else {
+            Ok(())
+        }
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn test_output(
+    mode: OutputModeArg,
+    stdout: TestWriter,
+    stderr: TestWriter,
+) -> Output<Box<dyn Write>, Box<dyn Write>> {
+    Output::with_writers(
+        &GlobalOptions { output: mode },
+        Box::new(stdout) as Box<dyn Write>,
+        Box::new(stderr) as Box<dyn Write>,
+    )
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use uuidx_core::{inspect_uuid, parse_uuid};
@@ -225,6 +287,7 @@ mod tests {
 
     #[test]
     fn explicit_output_modes_are_stable() {
+        assert_eq!(resolve_mode(OutputModeArg::Auto), RenderMode::Plain);
         assert_eq!(resolve_mode(OutputModeArg::Pretty), RenderMode::Pretty);
         assert_eq!(resolve_mode(OutputModeArg::Plain), RenderMode::Plain);
         assert_eq!(resolve_mode(OutputModeArg::Json), RenderMode::Json);
@@ -273,13 +336,68 @@ mod tests {
         }
     }
 
+    #[test]
+    fn write_and_flush_failures_preserve_their_error_categories() {
+        let uuid = parse_uuid("018f2c0b-6c5b-7d2e-8f4a-123456789abc").unwrap();
+
+        let mut plain = test_output(
+            OutputModeArg::Plain,
+            TestWriter::failing_write(),
+            TestWriter::working(),
+        );
+        assert!(matches!(
+            plain.generated(0, &uuid, "v7", UuidOutputFormat::Canonical, &[]),
+            Err(CliError::Output(_))
+        ));
+
+        let mut pretty = test_output(
+            OutputModeArg::Pretty,
+            TestWriter::working(),
+            TestWriter::failing_write(),
+        );
+        assert!(matches!(
+            pretty.record_error("inspect", 0, "bad", "invalid", "bad value"),
+            Err(CliError::Output(_))
+        ));
+
+        let mut json = test_output(
+            OutputModeArg::Json,
+            TestWriter::failing_write(),
+            TestWriter::working(),
+        );
+        assert!(matches!(
+            json.generated(0, &uuid, "v7", UuidOutputFormat::Canonical, &[]),
+            Err(CliError::Json(_))
+        ));
+
+        let mut stdout_flush = test_output(
+            OutputModeArg::Plain,
+            TestWriter::failing_flush(),
+            TestWriter::working(),
+        );
+        assert!(matches!(stdout_flush.flush(), Err(CliError::Output(_))));
+
+        let mut stderr_flush = test_output(
+            OutputModeArg::Plain,
+            TestWriter::working(),
+            TestWriter::failing_flush(),
+        );
+        assert!(matches!(stderr_flush.flush(), Err(CliError::Output(_))));
+    }
+
     #[cfg(feature = "ulid-inspect")]
     #[test]
     fn render_methods_support_ulid_inspection() {
         let inspection = uuidx_core::inspect_ulid("01ARZ3NDEKTSV4RRFFQ69G5FAV").unwrap();
-        let mut output = output(OutputModeArg::Json);
-        output
-            .inspected_ulid(0, &inspection.normalized, &inspection)
-            .unwrap();
+        for mode in [
+            OutputModeArg::Plain,
+            OutputModeArg::Pretty,
+            OutputModeArg::Json,
+        ] {
+            let mut output = output(mode);
+            output
+                .inspected_ulid(0, &inspection.normalized, &inspection)
+                .unwrap();
+        }
     }
 }
