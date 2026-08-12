@@ -1,3 +1,5 @@
+#![cfg_attr(target_env = "msvc", allow(linker_messages))]
+
 //! C-compatible bindings for UUID parsing, formatting, generation, and inspection.
 //!
 //! The public ABI is declared in `include/uuidx.h`. UUID values and inspection
