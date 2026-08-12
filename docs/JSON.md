@@ -1,5 +1,9 @@
 # JSON output
 
+This is the developer and automation reference for the CLI's versioned JSONL
+contract. User installation is documented in [`INSTALLATION.md`](INSTALLATION.md),
+and source builds are documented in [`SOURCEBUILD.md`](SOURCEBUILD.md).
+
 Use `--output json` (or `-o json`) to emit newline-delimited JSON (JSONL).
 Each line is one independent record written to stdout, so input batches can be
 processed as a stream. JSON output never contains ANSI escape sequences.
@@ -8,27 +12,27 @@ processed as a stream. JSON output never contains ANSI escape sequences.
 
 Every record contains these fields:
 
-| Field | Meaning |
-| --- | --- |
-| `schema_version` | Integer JSON contract version, currently `1`. |
-| `operation` | `generate`, `inspect`, `validate`, or `convert`. |
-| `index` | Zero-based index among generated records or nonblank input records. |
-| `ok` | `true` for a successful record and `false` for an invalid input record. |
+| Field            | Meaning                                                                 |
+| ---------------- | ----------------------------------------------------------------------- |
+| `schema_version` | Integer JSON contract version, currently `1`.                           |
+| `operation`      | `generate`, `inspect`, `validate`, or `convert`.                        |
+| `index`          | Zero-based index among generated records or nonblank input records.     |
+| `ok`             | `true` for a successful record and `false` for an invalid input record. |
 
 The following fields are present only when the record has a value for them:
 
-| Field | Meaning |
-| --- | --- |
-| `input` | Trimmed input value for input-based operations. Omitted for generation. |
-| `value` | Generated, normalized, or converted text value. |
-| `bytes` | Lowercase 32-character hexadecimal representation of a 16-byte UUID or ULID payload. Omitted for NanoIDs and Snowflakes. |
-| `kind` | `uuid`, `ulid`, `nanoid`, or `snowflake`. |
-| `version` | UUID version: `v1` through `v8`, `nil`, `max`, or `unknown(n)`. Omitted for other families. |
-| `format` | Requested UUID output format: `canonical`, `simple`, `urn`, or `braced`. |
-| `metadata` | Version- or kind-specific semantic metadata. |
-| `fields` | UUID bit-layout entries. |
-| `error` | Error object for an invalid input record. |
-| `warnings` | Non-fatal warnings. Omitted when the array would be empty. |
+| Field      | Meaning                                                                                                                  |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `input`    | Trimmed input value for input-based operations. Omitted for generation.                                                  |
+| `value`    | Generated, normalized, or converted text value.                                                                          |
+| `bytes`    | Lowercase 32-character hexadecimal representation of a 16-byte UUID or ULID payload. Omitted for NanoIDs and Snowflakes. |
+| `kind`     | `uuid`, `ulid`, `nanoid`, or `snowflake`.                                                                                |
+| `version`  | UUID version: `v1` through `v8`, `nil`, `max`, or `unknown(n)`. Omitted for other families.                              |
+| `format`   | Requested UUID output format: `canonical`, `simple`, `urn`, or `braced`.                                                 |
+| `metadata` | Version- or kind-specific semantic metadata.                                                                             |
+| `fields`   | UUID bit-layout entries.                                                                                                 |
+| `error`    | Error object for an invalid input record.                                                                                |
+| `warnings` | Non-fatal warnings. Omitted when the array would be empty.                                                               |
 
 Record-level optional fields are omitted, not serialized as `null`. The
 optional members inside `metadata.type = "time"` are an exception: they are
@@ -38,15 +42,15 @@ always present and use `null` when unavailable.
 
 Successful records use these operation-specific fields:
 
-| Operation | Fields in addition to the envelope |
-| --- | --- |
-| `generate` | `value`, `bytes`, `kind`, `version`, `format`, and optional `warnings` |
-| `inspect` UUID | `input`, `value`, `bytes`, `kind`, `version`, `metadata`, `fields`, and optional `warnings` |
-| `inspect` ULID | `input`, `value`, `bytes`, `kind`, and `metadata`; `version` and `fields` are omitted |
-| `inspect` NanoID | `input`, `value`, `kind`, and `metadata` |
-| `inspect` Snowflake | `input`, `value`, `kind`, and `metadata` |
-| `validate` | `input`, `value`, `bytes`, `kind`, and `version` |
-| `convert` | `input`, `value`, `bytes`, `kind`, `version`, `format`, and optional `warnings` |
+| Operation           | Fields in addition to the envelope                                                          |
+| ------------------- | ------------------------------------------------------------------------------------------- |
+| `generate`          | `value`, `bytes`, `kind`, `version`, `format`, and optional `warnings`                      |
+| `inspect` UUID      | `input`, `value`, `bytes`, `kind`, `version`, `metadata`, `fields`, and optional `warnings` |
+| `inspect` ULID      | `input`, `value`, `bytes`, `kind`, and `metadata`; `version` and `fields` are omitted       |
+| `inspect` NanoID    | `input`, `value`, `kind`, and `metadata`                                                    |
+| `inspect` Snowflake | `input`, `value`, `kind`, and `metadata`                                                    |
+| `validate`          | `input`, `value`, `bytes`, `kind`, and `version`                                            |
+| `convert`           | `input`, `value`, `bytes`, `kind`, `version`, `format`, and optional `warnings`             |
 
 JSON inspection always includes all available metadata and UUID `fields`,
 regardless of `--layout`. The option controls only the human-readable pretty
@@ -62,14 +66,14 @@ Snowflake text is canonical unsigned decimal without leading zeroes.
 `metadata` is emitted for successful inspection records. UUID metadata uses a
 tagged object whose `type` values and payloads are:
 
-| `type` | Payload |
-| --- | --- |
-| `none` | No additional metadata. Used for Nil, Max, and unknown UUID versions. |
-| `random` | No additional fields. Used for UUID v4. |
-| `name_based` | `algorithm`, either `MD5` for v3 or `SHA-1` for v5. |
-| `time` | `unix_seconds`, `unix_millis`, `subsec_nanos`, `clock_sequence`, `node_id`, and `node_kind`. Used for v1, v6, and v7. |
-| `custom` | `bytes`, the final 16 UUID bytes for v8, in lowercase hexadecimal. |
-| `dce_security` | No additional fields. Used for v2. |
+| `type`         | Payload                                                                                                               |
+| -------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `none`         | No additional metadata. Used for Nil, Max, and unknown UUID versions.                                                 |
+| `random`       | No additional fields. Used for UUID v4.                                                                               |
+| `name_based`   | `algorithm`, either `MD5` for v3 or `SHA-1` for v5.                                                                   |
+| `time`         | `unix_seconds`, `unix_millis`, `subsec_nanos`, `clock_sequence`, `node_id`, and `node_kind`. Used for v1, v6, and v7. |
+| `custom`       | `bytes`, the final 16 UUID bytes for v8, in lowercase hexadecimal.                                                    |
+| `dce_security` | No additional fields. Used for v2.                                                                                    |
 
 For `time` metadata, `clock_sequence` is present for v1 and v6 and is
 `null` for v7. `node_id` is a lowercase 12-character hexadecimal value for
@@ -98,7 +102,12 @@ never generated, validated, or converted as UUIDs.
 Standard NanoID inspection uses this metadata shape:
 
 ```json
-{"type":"nanoid","length":21,"alphabet":"A-Za-z0-9_-","entropy_bits":126}
+{
+  "type": "nanoid",
+  "length": 21,
+  "alphabet": "A-Za-z0-9_-",
+  "entropy_bits": 126
+}
 ```
 
 Only NanoID's default 21-character URL-safe format is recognized. Since
@@ -128,23 +137,23 @@ remains in the record-level string `value`.
 
 Each UUID `fields` entry has this shape:
 
-| Field | Meaning |
-| --- | --- |
-| `name` | Semantic layout field name. |
+| Field    | Meaning                                                                         |
+| -------- | ------------------------------------------------------------------------------- |
+| `name`   | Semantic layout field name.                                                     |
 | `offset` | Starting bit offset, counted from the most significant bit of the 128-bit UUID. |
-| `width` | Number of bits in the field. |
-| `value` | Lowercase hexadecimal field value with a `0x` prefix. |
+| `width`  | Number of bits in the field.                                                    |
+| `value`  | Lowercase hexadecimal field value with a `0x` prefix.                           |
 
 Fields are emitted in this order for each UUID version:
 
-| Version | Field names |
-| --- | --- |
-| v1 | `time_low`, `time_mid`, `version`, `time_hi`, `variant`, `clock_sequence`, `node` |
-| v6 | `timestamp_high`, `version`, `timestamp_low`, `variant`, `clock_sequence`, `node` |
-| v7 | `unix_timestamp_ms`, `version`, `rand_a`, `variant`, `rand_b` |
-| v8 | `custom_a`, `version`, `custom_b`, `variant`, `custom_c` |
-| v2, v3, v4, v5, and unknown versions | `payload_a`, `version`, `payload_b`, `variant`, `payload_c` |
-| Nil and Max | `value` |
+| Version                              | Field names                                                                       |
+| ------------------------------------ | --------------------------------------------------------------------------------- |
+| v1                                   | `time_low`, `time_mid`, `version`, `time_hi`, `variant`, `clock_sequence`, `node` |
+| v6                                   | `timestamp_high`, `version`, `timestamp_low`, `variant`, `clock_sequence`, `node` |
+| v7                                   | `unix_timestamp_ms`, `version`, `rand_a`, `variant`, `rand_b`                     |
+| v8                                   | `custom_a`, `version`, `custom_b`, `variant`, `custom_c`                          |
+| v2, v3, v4, v5, and unknown versions | `payload_a`, `version`, `payload_b`, `variant`, `payload_c`                       |
+| Nil and Max                          | `value`                                                                           |
 
 The offsets and widths in the record are authoritative; the field names above
 describe the current layout generated by the core inspector. Non-UUID records
@@ -155,14 +164,14 @@ do not contain `fields`.
 Warnings are informational strings and are emitted only when non-empty. The
 current warnings are:
 
-| Condition | Warning |
-| --- | --- |
-| Generate, inspect, or convert UUID v3 | `UUID v3 uses legacy MD5 name hashing` |
-| Generate, inspect, or convert UUID v5 | `UUID v5 uses legacy SHA-1 name hashing` |
-| Generate UUID v8 | `UUID v8 uniqueness is application-defined` |
-| Inspect UUID v1 | `UUID v1 exposes timestamp and node metadata` |
-| Inspect UUID v2 | `UUID v2 DCE Security semantics are outside RFC 9562` |
-| Inspect UUID v3 | `UUID v3 uses legacy MD5 name hashing` |
+| Condition                             | Warning                                               |
+| ------------------------------------- | ----------------------------------------------------- |
+| Generate, inspect, or convert UUID v3 | `UUID v3 uses legacy MD5 name hashing`                |
+| Generate, inspect, or convert UUID v5 | `UUID v5 uses legacy SHA-1 name hashing`              |
+| Generate UUID v8                      | `UUID v8 uniqueness is application-defined`           |
+| Inspect UUID v1                       | `UUID v1 exposes timestamp and node metadata`         |
+| Inspect UUID v2                       | `UUID v2 DCE Security semantics are outside RFC 9562` |
+| Inspect UUID v3                       | `UUID v3 uses legacy MD5 name hashing`                |
 
 ## Errors and batches
 
@@ -177,10 +186,10 @@ An invalid input produces a record with `ok: false`, `input`, and:
 
 The current data-error codes are:
 
-| Operation | Code |
-| --- | --- |
-| `inspect` | `invalid_identifier` |
-| `validate` or `convert` | `invalid_uuid` |
+| Operation               | Code                 |
+| ----------------------- | -------------------- |
+| `inspect`               | `invalid_identifier` |
+| `validate` or `convert` | `invalid_uuid`       |
 
 `message` is a human-readable parser or inspection error and should not be
 used as the machine-readable discriminator.
@@ -200,7 +209,43 @@ stderr and do not produce JSON records.
 UUID v7 inspection:
 
 ```json
-{"schema_version":1,"operation":"inspect","index":0,"ok":true,"input":"018f2c0b-6c5b-7d2e-8f4a-123456789abc","value":"018f2c0b-6c5b-7d2e-8f4a-123456789abc","bytes":"018f2c0b6c5b7d2e8f4a123456789abc","kind":"uuid","version":"v7","metadata":{"type":"time","unix_seconds":1714430897,"unix_millis":1714430897243,"subsec_nanos":243000000,"clock_sequence":null,"node_id":null,"node_kind":null},"fields":[{"name":"unix_timestamp_ms","offset":0,"width":48,"value":"0x18f2c0b6c5b"},{"name":"version","offset":48,"width":4,"value":"0x7"},{"name":"rand_a","offset":52,"width":12,"value":"0xd2e"},{"name":"variant","offset":64,"width":2,"value":"0x2"},{"name":"rand_b","offset":66,"width":62,"value":"0xf4a123456789abc"}]}
+{
+  "schema_version": 1,
+  "operation": "inspect",
+  "index": 0,
+  "ok": true,
+  "input": "018f2c0b-6c5b-7d2e-8f4a-123456789abc",
+  "value": "018f2c0b-6c5b-7d2e-8f4a-123456789abc",
+  "bytes": "018f2c0b6c5b7d2e8f4a123456789abc",
+  "kind": "uuid",
+  "version": "v7",
+  "metadata": {
+    "type": "time",
+    "unix_seconds": 1714430897,
+    "unix_millis": 1714430897243,
+    "subsec_nanos": 243000000,
+    "clock_sequence": null,
+    "node_id": null,
+    "node_kind": null
+  },
+  "fields": [
+    {
+      "name": "unix_timestamp_ms",
+      "offset": 0,
+      "width": 48,
+      "value": "0x18f2c0b6c5b"
+    },
+    { "name": "version", "offset": 48, "width": 4, "value": "0x7" },
+    { "name": "rand_a", "offset": 52, "width": 12, "value": "0xd2e" },
+    { "name": "variant", "offset": 64, "width": 2, "value": "0x2" },
+    {
+      "name": "rand_b",
+      "offset": 66,
+      "width": 62,
+      "value": "0xf4a123456789abc"
+    }
+  ]
+}
 ```
 
 A mixed validation batch:
