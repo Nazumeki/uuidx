@@ -8,7 +8,7 @@ members = [
 resolver = "3"
 
 [workspace.package]
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 rust-version = "1.88"
 license = "MIT"
@@ -16,7 +16,7 @@ readme = "README.md"
 repository = "https://github.com/Nazumeki/uuidx"
 
 [workspace.dependencies]
-uuidx-core = { version = "0.1.0", path = "crates/uuidx-core" }
+uuidx-core = { version = "0.1.1", path = "crates/uuidx-core" }
 
 [profile.release]
 codegen-units = 1

@@ -666,7 +666,7 @@ dependencies = [
 
 [[package]]
 name = "uuidx-cli"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anstream",
  "anstyle",
@@ -681,7 +681,7 @@ dependencies = [
 
 [[package]]
 name = "uuidx-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "hex",
  "thiserror",
@@ -691,14 +691,14 @@ dependencies = [
 
 [[package]]
 name = "uuidx-ffi"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "uuidx-core",
 ]
 
 [[package]]
 name = "uuidx-wasm"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "getrandom",
  "hex",
