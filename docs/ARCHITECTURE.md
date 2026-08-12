@@ -23,7 +23,9 @@ implements UUID bit rules.
 | `parse.rs` | UUID text parsing through the `uuid` crate |
 | `format.rs` | Canonical, simple, URN, and braced UUID formats plus fixed-size hex payloads |
 | `generate/` | Version-specific v3-v8 generation modules |
-| `inspect/` | Version classification, RFC variant detection, metadata, and bit layouts |
+| `inspect/` | UUID metadata plus automatic identifier-family recognition |
+| `inspect/nanoid.rs` | Standard 21-character NanoID inspection |
+| `inspect/snowflake.rs` | Original Twitter Snowflake decoding |
 | `inspect/ulid.rs` | Optional ULID parsing for read-only inspection |
 
 The public generation enum intentionally contains only v3-v8. That makes
@@ -64,7 +66,9 @@ from leaking into pipeline or JSON output.
 inspection operations through `wasm-bindgen`. It converts JavaScript option
 objects and result objects at the boundary, represents wide numeric inspection
 fields without losing precision, and maps domain failures to JavaScript errors
-with stable codes. Optional ULID inspection follows the core feature gate.
+with stable codes. Automatic identifier detection is owned by the core so the
+CLI and WebAssembly adapters share one recognition order. Optional ULID
+inspection follows the core feature gate.
 
 ## FFI crate
 

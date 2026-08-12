@@ -69,6 +69,19 @@ pub enum JsonMetadata {
         random: String,
         bytes: String,
     },
+    Nanoid {
+        length: usize,
+        alphabet: &'static str,
+        entropy_bits: u16,
+    },
+    Snowflake {
+        epoch: &'static str,
+        epoch_ms: u64,
+        timestamp_ms: u64,
+        datacenter_id: u8,
+        worker_id: u8,
+        sequence: u16,
+    },
 }
 
 impl JsonRecord {
@@ -207,7 +220,64 @@ impl JsonRecord {
             }),
             fields: None,
             error: None,
-            warnings: vec!["ULID support is inspection-only".to_owned()],
+            warnings: Vec::new(),
+        }
+    }
+
+    pub fn nanoid_inspection(
+        index: u64,
+        input: &str,
+        inspection: &uuidx_core::NanoidInspection,
+    ) -> Self {
+        Self {
+            schema_version: 1,
+            operation: "inspect".to_owned(),
+            index,
+            ok: true,
+            input: Some(input.to_owned()),
+            value: Some(inspection.normalized.clone()),
+            bytes: None,
+            kind: Some("nanoid".to_owned()),
+            version: None,
+            format: None,
+            metadata: Some(JsonMetadata::Nanoid {
+                length: inspection.length,
+                alphabet: inspection.alphabet,
+                entropy_bits: inspection.entropy_bits,
+            }),
+            fields: None,
+            error: None,
+            warnings: Vec::new(),
+        }
+    }
+
+    pub fn snowflake_inspection(
+        index: u64,
+        input: &str,
+        inspection: &uuidx_core::SnowflakeInspection,
+    ) -> Self {
+        Self {
+            schema_version: 1,
+            operation: "inspect".to_owned(),
+            index,
+            ok: true,
+            input: Some(input.to_owned()),
+            value: Some(inspection.normalized.clone()),
+            bytes: None,
+            kind: Some("snowflake".to_owned()),
+            version: None,
+            format: None,
+            metadata: Some(JsonMetadata::Snowflake {
+                epoch: "twitter",
+                epoch_ms: inspection.epoch_ms,
+                timestamp_ms: inspection.timestamp_ms,
+                datacenter_id: inspection.datacenter_id,
+                worker_id: inspection.worker_id,
+                sequence: inspection.sequence,
+            }),
+            fields: None,
+            error: None,
+            warnings: Vec::new(),
         }
     }
 
@@ -437,13 +507,42 @@ mod tests {
 
     #[cfg(feature = "ulid-inspect")]
     #[test]
-    fn ulid_inspection_serializes_inspection_only_metadata() {
+    fn ulid_inspection_serializes_metadata_without_annotations() {
         let inspection = uuidx_core::inspect_ulid("01ARZ3NDEKTSV4RRFFQ69G5FAV").unwrap();
         let record = JsonRecord::ulid_inspection(1, &inspection.normalized, &inspection);
         let json = serde_json::to_value(record).unwrap();
         assert_eq!(json["kind"], "ulid");
         assert_eq!(json["metadata"]["type"], "ulid");
-        assert_eq!(json["warnings"][0], "ULID support is inspection-only");
+        assert!(json["warnings"].is_null());
         assert!(json["version"].is_null());
+    }
+
+    #[test]
+    fn nanoid_and_snowflake_inspections_serialize_metadata_without_annotations() {
+        let nanoid = uuidx_core::inspect_nanoid("V1StGXR8_Z5jdHi6B-myT").unwrap();
+        let json = serde_json::to_value(JsonRecord::nanoid_inspection(
+            1,
+            &nanoid.normalized,
+            &nanoid,
+        ))
+        .unwrap();
+        assert_eq!(json["kind"], "nanoid");
+        assert_eq!(json["metadata"]["type"], "nanoid");
+        assert_eq!(json["metadata"]["entropy_bits"], 126);
+        assert!(json["bytes"].is_null());
+        assert!(json["warnings"].is_null());
+
+        let snowflake = uuidx_core::inspect_snowflake("1724552287438348288").unwrap();
+        let json = serde_json::to_value(JsonRecord::snowflake_inspection(
+            2,
+            &snowflake.normalized,
+            &snowflake,
+        ))
+        .unwrap();
+        assert_eq!(json["kind"], "snowflake");
+        assert_eq!(json["metadata"]["type"], "snowflake");
+        assert_eq!(json["metadata"]["epoch"], "twitter");
+        assert!(json["bytes"].is_null());
+        assert!(json["warnings"].is_null());
     }
 }

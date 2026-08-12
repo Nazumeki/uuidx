@@ -22,8 +22,9 @@ generation paths are rejected by the core API and by the CLI.
 - Produce terminal-oriented output, pipeline-safe plain output, or
   newline-delimited JSON for automation.
 - Redact time-based node identifiers while retaining their classification.
-- Inspect ULIDs when the optional `ulid-inspect` feature is enabled. ULIDs are
-  never generated, validated as UUIDs, or converted by `uuidx`.
+- Automatically inspect UUIDs, standard 21-character NanoIDs, original Twitter
+  Snowflakes, and ULIDs when the optional `ulid-inspect` feature is enabled.
+  Non-UUID identifiers are never generated, validated as UUIDs, or converted.
 - Use the same generation, validation, formatting, and inspection policy from
   JavaScript or native code through focused WebAssembly and C ABI crates.
 
@@ -166,7 +167,7 @@ and their aliases are:
 | Command    | Alias | Purpose                                        |
 | ---------- | ----- | ---------------------------------------------- |
 | `generate` | `g`   | Generate UUID v3-v8 values.                    |
-| `inspect`  | `i`   | Inspect UUIDs and optionally recognize ULIDs.  |
+| `inspect`  | `i`   | Automatically inspect supported identifier families. |
 | `validate` | `v`   | Validate UUID syntax and report record errors. |
 | `convert`  | `c`   | Convert UUID text between standard formats.    |
 
@@ -220,15 +221,15 @@ the required v3/v5 namespace/name pair is a usage error with exit status `2`.
 uuidx inspect [OPTIONS] [VALUE]...
 ```
 
-Inspection reports the normalized UUID, input format, raw bytes, version,
-variant, nil/max flags, and version-specific metadata. With `--layout`, pretty
-output also reports field offsets, widths, and hexadecimal values. JSON output
-always contains its structured `fields` array; `--layout` only changes the
-pretty renderer.
+Inspection automatically recognizes UUIDs, ULIDs, standard NanoIDs, and
+original Twitter Snowflakes. Pretty output is concise by default: it reports
+the normalized value, detected family information, and human-readable time
+when available. `--layout` adds raw values, decoded components, and bit ranges.
+JSON always contains the complete structured inspection data.
 
 | Option                     | Description                                                          |
 | -------------------------- | -------------------------------------------------------------------- |
-| `-L`, `--layout`           | Add bit offsets and values to pretty output.                         |
+| `-L`, `--layout`           | Add raw values, decoded fields, and bit ranges to pretty output.     |
 | `-r`, `--redact-sensitive` | Omit time-based node ID bytes while keeping the node classification. |
 | `-f`, `--fail-fast`        | Stop after the first invalid input record.                           |
 | `-i`, `--input <FILE>`     | Read one value per line from a file instead of positional input.     |
@@ -240,11 +241,15 @@ uuidx inspect 018f2c0b-6c5b-7d2e-8f4a-123456789abc
 uuidx inspect 11111111-1111-6111-9111-111111111111 \
   --redact-sensitive --output json
 uuidx inspect 01ARZ3NDEKTSV4RRFFQ69G5FAV --output json
+uuidx inspect V1StGXR8_Z5jdHi6B-myT --output json
+uuidx inspect 1724552287438348288 --output json
 ```
 
-ULID inspection is read-only compatibility support. ULID records have
-`"kind":"ulid"`, timestamp and random-payload metadata, and an inspection-only
-warning. They are not treated as UUIDs by `validate` or `convert`.
+ULID records have `"kind":"ulid"`, timestamp metadata, and an 80-bit random
+payload. NanoID recognition is limited to the default 21-character
+`A-Za-z0-9_-` format. Snowflake inspection uses Twitter's original 41-bit
+timestamp, 5-bit datacenter, 5-bit worker, 12-bit sequence layout and epoch
+`1288834974657`. Custom NanoID formats and Snowflake layouts are not inferred.
 
 ### `validate`
 
@@ -397,6 +402,11 @@ The core API includes:
 - `generate_uuid` and `GenerationOptions` for version-specific generation.
 - `inspect_uuid` and `UuidInspection` for version, variant, metadata, and bit
   layout information.
+- `inspect_identifier` and `IdentifierInspection` for automatic family
+  recognition.
+- `inspect_nanoid` and `NanoidInspection` for the standard NanoID profile.
+- `inspect_snowflake` and `SnowflakeInspection` for original Twitter
+  Snowflakes.
 - `parse_hex_array` for fixed-size hexadecimal payloads.
 - `inspect_ulid` and `UlidInspection` behind the optional `ulid-inspect`
   feature.
@@ -438,7 +448,10 @@ uuidx-core = { version = "0.1", features = ["ulid-inspect"] }
 - `validateUuid(input)` reports whether UUID text parses.
 - `formatUuid(input, format)` converts UUID text to a supported format.
 - `inspectUuid(input)` returns structured UUID metadata and bit fields.
+- `inspectIdentifier(input)` automatically returns a tagged identifier result.
 - `inspectUlid(input)` is available with the default `ulid-inspect` feature.
+- `inspectNanoid(input)` inspects the standard NanoID profile.
+- `inspectSnowflake(input)` decodes an original Twitter Snowflake.
 
 The generated TypeScript declarations define the option and result shapes.
 Fallible functions throw JavaScript `Error` values with a machine-readable

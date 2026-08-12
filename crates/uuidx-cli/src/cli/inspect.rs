@@ -8,7 +8,7 @@ pub struct InspectArgs {
     #[command(flatten)]
     pub input: InputArgs,
 
-    /// Show bit offsets and values in pretty output.
+    /// Show decoded fields and bit-layout details in pretty output.
     #[arg(short = 'L', long, help_heading = "Inspection options")]
     pub layout: bool,
 

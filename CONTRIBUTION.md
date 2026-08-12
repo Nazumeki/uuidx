@@ -28,7 +28,8 @@ The repository follows these principles:
 
 The current generation policy is intentional: v3, v4, v5, v6, v7, and v8 are
 generation targets; v1 and v2 remain available for parsing, inspection,
-validation, and conversion. ULID support is optional and inspection-only.
+validation, and conversion. ULID, NanoID, and Snowflake support is
+inspection-only; only ULID inspection is optional.
 Changes that broaden this policy need a clear design decision and matching
 tests rather than a fallback path.
 
@@ -128,6 +129,9 @@ hard to validate.
 | `format.rs` | UUID output formats and fixed-size hexadecimal payload parsing. |
 | `generate/` | Version-specific v3-v8 generation. |
 | `inspect/` | Version classification, variants, metadata, and bit layouts. |
+| `inspect/identifier.rs` | Automatic identifier-family recognition. |
+| `inspect/nanoid.rs` | Standard 21-character NanoID inspection. |
+| `inspect/snowflake.rs` | Original Twitter Snowflake inspection. |
 | `inspect/ulid.rs` | Optional read-only ULID inspection. |
 
 When adding or changing a UUID rule:

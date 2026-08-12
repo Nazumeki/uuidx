@@ -632,11 +632,28 @@ fn bit_layout_exposes_stable_offsets() {
 
 #[cfg(feature = "ulid-inspect")]
 #[test]
-fn ulid_is_inspect_only_compatibility() {
+fn ulid_inspection_reports_timestamp_and_layout() {
     let inspection = uuidx_core::inspect_ulid("01ARZ3NDEKTSV4RRFFQ69G5FAV").expect("valid ULID");
     assert_eq!(inspection.normalized, "01ARZ3NDEKTSV4RRFFQ69G5FAV");
     assert_eq!(inspection.bytes.len(), 16);
     assert_eq!(inspection.timestamp_ms, 1_469_922_850_259);
+    assert_eq!(inspection.fields.len(), 2);
+    assert_eq!(
+        (
+            inspection.fields[0].name.as_str(),
+            inspection.fields[0].offset,
+            inspection.fields[0].width,
+        ),
+        ("timestamp_ms", 0, 48)
+    );
+    assert_eq!(
+        (
+            inspection.fields[1].name.as_str(),
+            inspection.fields[1].offset,
+            inspection.fields[1].width,
+        ),
+        ("random", 48, 80)
+    );
 }
 
 #[cfg(feature = "ulid-inspect")]
@@ -650,4 +667,107 @@ fn ulid_parser_reports_empty_and_invalid_values() {
         uuidx_core::inspect_ulid("not-a-ulid"),
         Err(uuidx_core::UlidParseError::Invalid(_))
     ));
+}
+
+#[test]
+fn nanoid_inspection_recognizes_the_standard_profile() {
+    let inspection = uuidx_core::inspect_nanoid("  V1StGXR8_Z5jdHi6B-myT  ").unwrap();
+    assert_eq!(inspection.normalized, "V1StGXR8_Z5jdHi6B-myT");
+    assert_eq!(inspection.length, 21);
+    assert_eq!(inspection.alphabet, "A-Za-z0-9_-");
+    assert_eq!(inspection.entropy_bits, 126);
+}
+
+#[test]
+fn nanoid_inspection_rejects_nonstandard_shapes() {
+    assert_eq!(
+        uuidx_core::inspect_nanoid(""),
+        Err(uuidx_core::NanoidParseError::Empty)
+    );
+    for input in [
+        "too-short",
+        "V1StGXR8_Z5jdHi6B-my!",
+        "V1StGXR8_Z5jdHi6B-myTT",
+    ] {
+        assert_eq!(
+            uuidx_core::inspect_nanoid(input),
+            Err(uuidx_core::NanoidParseError::Invalid)
+        );
+    }
+}
+
+#[test]
+fn snowflake_inspection_decodes_the_twitter_layout() {
+    let timestamp_ms = 1_700_000_000_000_u64;
+    let value = ((timestamp_ms - uuidx_core::TWITTER_SNOWFLAKE_EPOCH_MS) << 22)
+        | (17_u64 << 17)
+        | (23_u64 << 12)
+        | 3_210;
+    let inspection = uuidx_core::inspect_snowflake(&value.to_string()).unwrap();
+
+    assert_eq!(inspection.normalized, value.to_string());
+    assert_eq!(inspection.value, value);
+    assert_eq!(inspection.epoch_ms, 1_288_834_974_657);
+    assert_eq!(inspection.timestamp_ms, timestamp_ms);
+    assert_eq!(inspection.datacenter_id, 17);
+    assert_eq!(inspection.worker_id, 23);
+    assert_eq!(inspection.sequence, 3_210);
+    assert_eq!(inspection.fields.len(), 5);
+    assert_eq!(
+        inspection
+            .fields
+            .iter()
+            .map(|field| (field.name.as_str(), field.offset, field.width))
+            .collect::<Vec<_>>(),
+        vec![
+            ("sign", 0, 1),
+            ("timestamp_delta_ms", 1, 41),
+            ("datacenter_id", 42, 5),
+            ("worker_id", 47, 5),
+            ("sequence", 52, 12),
+        ]
+    );
+}
+
+#[test]
+fn snowflake_inspection_normalizes_and_rejects_invalid_values() {
+    assert_eq!(
+        uuidx_core::inspect_snowflake(" 42 ").unwrap().normalized,
+        "42"
+    );
+    assert_eq!(
+        uuidx_core::inspect_snowflake(""),
+        Err(uuidx_core::SnowflakeParseError::Empty)
+    );
+    for input in ["-1", "+1", "1.5", "00042", "9223372036854775808"] {
+        assert_eq!(
+            uuidx_core::inspect_snowflake(input),
+            Err(uuidx_core::SnowflakeParseError::Invalid)
+        );
+    }
+}
+
+#[test]
+fn identifier_inspection_detects_each_supported_family() {
+    assert!(matches!(
+        uuidx_core::inspect_identifier("018f2c0b-6c5b-7d2e-8f4a-123456789abc"),
+        Ok(uuidx_core::IdentifierInspection::Uuid(_))
+    ));
+    #[cfg(feature = "ulid-inspect")]
+    assert!(matches!(
+        uuidx_core::inspect_identifier("01ARZ3NDEKTSV4RRFFQ69G5FAV"),
+        Ok(uuidx_core::IdentifierInspection::Ulid(_))
+    ));
+    assert!(matches!(
+        uuidx_core::inspect_identifier("V1StGXR8_Z5jdHi6B-myT"),
+        Ok(uuidx_core::IdentifierInspection::Nanoid(_))
+    ));
+    assert!(matches!(
+        uuidx_core::inspect_identifier("1724552287438348288"),
+        Ok(uuidx_core::IdentifierInspection::Snowflake(_))
+    ));
+    assert_eq!(
+        uuidx_core::inspect_identifier("not-an-identifier"),
+        Err(uuidx_core::IdentifierParseError)
+    );
 }

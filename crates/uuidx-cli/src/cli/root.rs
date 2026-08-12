@@ -80,7 +80,7 @@ pub enum Command {
     /// Generate UUID v3-v8 values.
     #[command(visible_alias = "g")]
     Generate(GenerateArgs),
-    /// Inspect UUIDs and optionally recognize ULIDs in read-only mode.
+    /// Inspect UUID, ULID, NanoID, and Snowflake values.
     #[command(visible_alias = "i")]
     Inspect(InspectArgs),
     /// Validate UUID syntax and version structure.

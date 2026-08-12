@@ -14,6 +14,14 @@ mod types;
 pub use error::{GenerateError, HexError, ParseUuidError};
 pub use format::{UuidOutputFormat, format_uuid, parse_hex_array};
 pub use generate::generate_uuid;
+pub use inspect::identifier::{IdentifierInspection, IdentifierParseError, inspect_identifier};
+pub use inspect::nanoid::{
+    NANOID_STANDARD_ALPHABET, NANOID_STANDARD_ENTROPY_BITS, NANOID_STANDARD_LENGTH,
+    NanoidInspection, NanoidParseError, inspect_nanoid,
+};
+pub use inspect::snowflake::{
+    SnowflakeInspection, SnowflakeParseError, TWITTER_SNOWFLAKE_EPOCH_MS, inspect_snowflake,
+};
 pub use inspect::{
     BitField, NameHashAlgorithm, NodeKind, TimestampInfo, UuidInspection, UuidMetadata,
     inspect_uuid,

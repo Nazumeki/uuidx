@@ -1,5 +1,9 @@
 use crate::{InspectableUuidVersion, Uuid, UuidVariant};
 
+pub mod identifier;
+pub mod nanoid;
+pub mod snowflake;
+
 #[cfg(feature = "ulid-inspect")]
 pub mod ulid;
 

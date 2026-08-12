@@ -5,54 +5,87 @@ use super::theme::{dim, heading, label, success};
 
 const LABEL_WIDTH: usize = 17;
 
-pub fn summary(input: &str, inspection: &UuidInspection, redact_sensitive: bool) -> String {
+pub fn summary(input: &str, inspection: &UuidInspection) -> String {
     let mut lines = vec![
         field("input", input.to_owned()),
         field("normalized", success(&inspection.normalized)),
         field("version", inspection.version.to_string()),
         field("format", input_format(input).to_string()),
         field("variant", inspection.variant.to_string()),
-        field("bytes", dim(&hex::encode(inspection.bytes))),
-        field("nil", inspection.is_nil.to_string()),
-        field("max", inspection.is_max.to_string()),
     ];
 
     match &inspection.metadata {
-        UuidMetadata::Time {
-            timestamp,
-            clock_sequence,
-            node_id,
-            node_kind,
-        } => {
+        UuidMetadata::Time { timestamp, .. } => {
             lines.push(field("timestamp", format_timestamp(timestamp)));
-            lines.push(field("unix_millis", timestamp.unix_millis.to_string()));
-            if let Some(sequence) = clock_sequence {
-                lines.push(field("clock_sequence", sequence.to_string()));
-            }
-            if let Some(node) = node_id {
-                let value = if redact_sensitive {
-                    "[redacted]".to_owned()
-                } else {
-                    hex::encode(node)
-                };
-                lines.push(field("node_id", value));
-            }
-            if let Some(kind) = node_kind {
-                lines.push(field("node_kind", kind.to_string()));
-            }
         }
         UuidMetadata::NameBased { algorithm } => {
             lines.push(field("algorithm", algorithm.to_string()));
         }
-        UuidMetadata::Custom { bytes } => {
-            lines.push(field("custom_bytes", hex::encode(bytes)));
-        }
+        UuidMetadata::Custom { .. } => {}
         UuidMetadata::DceSecurity => {
             lines.push(field("semantics", "DCE Security".to_owned()));
         }
         UuidMetadata::Random | UuidMetadata::None => {}
     }
 
+    lines.join("\n")
+}
+
+pub fn details(inspection: &UuidInspection, redact_sensitive: bool) -> String {
+    let mut lines = vec![
+        heading("Details"),
+        field("bytes", dim(&hex::encode(inspection.bytes))),
+    ];
+
+    if let UuidMetadata::Time {
+        timestamp,
+        clock_sequence,
+        node_id,
+        node_kind,
+    } = &inspection.metadata
+    {
+        lines.push(field("unix_seconds", timestamp.unix_seconds.to_string()));
+        lines.push(field("unix_millis", timestamp.unix_millis.to_string()));
+        lines.push(field("subsec_nanos", timestamp.subsec_nanos.to_string()));
+        if let Some(sequence) = clock_sequence {
+            lines.push(field("clock_sequence", sequence.to_string()));
+        }
+        if let Some(node) = node_id {
+            let value = if redact_sensitive {
+                "[redacted]".to_owned()
+            } else {
+                hex::encode(node)
+            };
+            lines.push(field("node_id", value));
+        }
+        if let Some(kind) = node_kind {
+            lines.push(field("node_kind", kind.to_string()));
+        }
+    }
+
+    lines.join("\n")
+}
+
+pub fn identifier_summary(input: &str, normalized: &str, fields: &[(&str, String)]) -> String {
+    let mut lines = vec![
+        field("input", input.to_owned()),
+        field("normalized", success(normalized)),
+    ];
+    lines.extend(
+        fields
+            .iter()
+            .map(|(name, value)| field(name, value.clone())),
+    );
+    lines.join("\n")
+}
+
+pub fn identifier_details(fields: &[(&str, String)]) -> String {
+    let mut lines = vec![heading("Details")];
+    lines.extend(
+        fields
+            .iter()
+            .map(|(name, value)| field(name, value.clone())),
+    );
     lines.join("\n")
 }
 
@@ -95,6 +128,23 @@ fn format_timestamp(timestamp: &TimestampInfo) -> String {
         .unwrap_or_else(|| format!("unix:{}", timestamp.unix_seconds))
 }
 
+pub fn format_unix_millis(timestamp_ms: u64) -> String {
+    let seconds = i64::try_from(timestamp_ms / 1_000).ok();
+    let nanoseconds = u32::try_from(timestamp_ms % 1_000)
+        .ok()
+        .map(|ms| ms * 1_000_000);
+    seconds
+        .zip(nanoseconds)
+        .and_then(|(seconds, nanoseconds)| {
+            OffsetDateTime::from_unix_timestamp(seconds)
+                .ok()?
+                .replace_nanosecond(nanoseconds)
+                .ok()
+        })
+        .and_then(|date_time| date_time.format(&Rfc3339).ok())
+        .unwrap_or_else(|| format!("unix-ms:{timestamp_ms}"))
+}
+
 fn input_format(input: &str) -> UuidOutputFormat {
     let trimmed = input.trim();
     let lowercase = trimmed.to_ascii_lowercase();
@@ -123,43 +173,36 @@ mod tests {
     #[test]
     fn summary_renders_time_name_custom_dce_and_plain_metadata() {
         let v7 = inspection("018f2c0b-6c5b-7d2e-8f4a-123456789abc");
-        let v7_summary = summary("018f2c0b-6c5b-7d2e-8f4a-123456789abc", &v7, false);
+        let v7_summary = summary("018f2c0b-6c5b-7d2e-8f4a-123456789abc", &v7);
         assert!(v7_summary.contains("timestamp"));
-        assert!(v7_summary.contains("unix_millis"));
+        assert!(!v7_summary.contains("unix_millis"));
         assert!(!v7_summary.contains("node_id"));
 
         let v1 = inspection("11111111-1111-1111-9111-111111111111");
-        assert!(summary("11111111-1111-1111-9111-111111111111", &v1, false).contains("node_kind"));
+        assert!(!summary("11111111-1111-1111-9111-111111111111", &v1).contains("node_kind"));
 
         let v6 = inspection("11111111-1111-6111-9111-111111111111");
-        let unredacted = summary("11111111-1111-6111-9111-111111111111", &v6, false);
+        let unredacted = details(&v6, false);
         assert!(unredacted.contains("clock_sequence"));
         assert!(unredacted.contains("node_id"));
         assert!(!unredacted.contains("[redacted]"));
-        let redacted = summary("11111111-1111-6111-9111-111111111111", &v6, true);
+        let redacted = details(&v6, true);
         assert!(redacted.contains("[redacted]"));
 
         assert!(
             summary(
                 "11111111-1111-5111-9111-111111111111",
                 &inspection("11111111-1111-5111-9111-111111111111"),
-                false,
             )
             .contains("algorithm")
         );
         assert!(
-            summary(
-                "11111111-1111-8111-9111-111111111111",
-                &inspection("11111111-1111-8111-9111-111111111111"),
-                false,
-            )
-            .contains("custom_bytes")
+            details(&inspection("11111111-1111-8111-9111-111111111111"), false,).contains("bytes")
         );
         assert!(
             summary(
                 "11111111-1111-2111-9111-111111111111",
                 &inspection("11111111-1111-2111-9111-111111111111"),
-                false,
             )
             .contains("DCE Security")
         );
@@ -167,7 +210,6 @@ mod tests {
             !summary(
                 "11111111-1111-4111-9111-111111111111",
                 &inspection("11111111-1111-4111-9111-111111111111"),
-                false,
             )
             .contains("algorithm")
         );

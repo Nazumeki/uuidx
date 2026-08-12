@@ -1,5 +1,8 @@
 use serde::Serialize;
-use uuidx_core::{BitField, UuidInspection, UuidMetadata, UuidVariant, inspect_uuid, parse_uuid};
+use uuidx_core::{
+    BitField, IdentifierInspection, NanoidInspection, SnowflakeInspection, UuidInspection,
+    UuidMetadata, UuidVariant, inspect_uuid, parse_uuid,
+};
 
 use crate::error::ApiError;
 
@@ -54,6 +57,36 @@ pub(crate) enum MetadataDto {
 pub(crate) fn inspect(input: &str) -> Result<UuidInspectionDto, ApiError> {
     let uuid = parse_uuid(input)?;
     Ok(UuidInspectionDto::from(inspect_uuid(&uuid)))
+}
+
+#[derive(Debug, Serialize)]
+#[serde(untagged)]
+pub(crate) enum IdentifierInspectionDto {
+    Uuid(UuidInspectionDto),
+    #[cfg(feature = "ulid-inspect")]
+    Ulid(UlidInspectionDto),
+    Nanoid(NanoidInspectionDto),
+    Snowflake(SnowflakeInspectionDto),
+}
+
+pub(crate) fn inspect_identifier(input: &str) -> Result<IdentifierInspectionDto, ApiError> {
+    match uuidx_core::inspect_identifier(input)
+        .map_err(|error| ApiError::new("invalid_identifier", error.to_string()))?
+    {
+        IdentifierInspection::Uuid(inspection) => {
+            Ok(IdentifierInspectionDto::Uuid(inspection.into()))
+        }
+        #[cfg(feature = "ulid-inspect")]
+        IdentifierInspection::Ulid(inspection) => {
+            Ok(IdentifierInspectionDto::Ulid(ulid_dto(inspection)))
+        }
+        IdentifierInspection::Nanoid(inspection) => {
+            Ok(IdentifierInspectionDto::Nanoid(inspection.into()))
+        }
+        IdentifierInspection::Snowflake(inspection) => {
+            Ok(IdentifierInspectionDto::Snowflake(inspection.into()))
+        }
+    }
 }
 
 impl From<UuidInspection> for UuidInspectionDto {
@@ -136,13 +169,80 @@ pub(crate) struct UlidInspectionDto {
 pub(crate) fn inspect_ulid(input: &str) -> Result<UlidInspectionDto, ApiError> {
     let inspection = uuidx_core::inspect_ulid(input)
         .map_err(|error| ApiError::new("invalid_ulid", error.to_string()))?;
-    Ok(UlidInspectionDto {
+    Ok(ulid_dto(inspection))
+}
+
+#[cfg(feature = "ulid-inspect")]
+fn ulid_dto(inspection: uuidx_core::UlidInspection) -> UlidInspectionDto {
+    UlidInspectionDto {
         kind: "ulid",
         value: inspection.normalized,
         bytes: hex::encode(inspection.bytes),
         timestamp_ms: inspection.timestamp_ms,
         random: format!("0x{:020x}", inspection.random),
-    })
+    }
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct NanoidInspectionDto {
+    kind: &'static str,
+    value: String,
+    length: usize,
+    alphabet: &'static str,
+    entropy_bits: u16,
+}
+
+impl From<NanoidInspection> for NanoidInspectionDto {
+    fn from(inspection: NanoidInspection) -> Self {
+        Self {
+            kind: "nanoid",
+            value: inspection.normalized,
+            length: inspection.length,
+            alphabet: inspection.alphabet,
+            entropy_bits: inspection.entropy_bits,
+        }
+    }
+}
+
+pub(crate) fn inspect_nanoid(input: &str) -> Result<NanoidInspectionDto, ApiError> {
+    uuidx_core::inspect_nanoid(input)
+        .map(NanoidInspectionDto::from)
+        .map_err(|error| ApiError::new("invalid_nanoid", error.to_string()))
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct SnowflakeInspectionDto {
+    kind: &'static str,
+    value: String,
+    epoch: &'static str,
+    epoch_ms: u64,
+    timestamp_ms: u64,
+    datacenter_id: u8,
+    worker_id: u8,
+    sequence: u16,
+}
+
+impl From<SnowflakeInspection> for SnowflakeInspectionDto {
+    fn from(inspection: SnowflakeInspection) -> Self {
+        Self {
+            kind: "snowflake",
+            value: inspection.normalized,
+            epoch: "twitter",
+            epoch_ms: inspection.epoch_ms,
+            timestamp_ms: inspection.timestamp_ms,
+            datacenter_id: inspection.datacenter_id,
+            worker_id: inspection.worker_id,
+            sequence: inspection.sequence,
+        }
+    }
+}
+
+pub(crate) fn inspect_snowflake(input: &str) -> Result<SnowflakeInspectionDto, ApiError> {
+    uuidx_core::inspect_snowflake(input)
+        .map(SnowflakeInspectionDto::from)
+        .map_err(|error| ApiError::new("invalid_snowflake", error.to_string()))
 }
 
 #[cfg(test)]
@@ -253,6 +353,33 @@ mod tests {
         assert_eq!(
             inspect_ulid("not-a-ulid").unwrap_err().code(),
             "invalid_ulid"
+        );
+    }
+
+    #[test]
+    fn identifier_inspection_serializes_nanoid_and_snowflake_safely() {
+        let nanoid =
+            serde_json::to_value(inspect_identifier("V1StGXR8_Z5jdHi6B-myT").unwrap()).unwrap();
+        assert_eq!(nanoid["kind"], "nanoid");
+        assert_eq!(nanoid["entropyBits"], 126);
+
+        let snowflake =
+            serde_json::to_value(inspect_identifier("1724552287438348288").unwrap()).unwrap();
+        assert_eq!(snowflake["kind"], "snowflake");
+        assert_eq!(snowflake["value"], "1724552287438348288");
+        assert!(snowflake["timestampMs"].is_number());
+    }
+
+    #[test]
+    fn identifier_specific_inspectors_return_stable_error_codes() {
+        assert_eq!(
+            inspect_identifier("bad").unwrap_err().code(),
+            "invalid_identifier"
+        );
+        assert_eq!(inspect_nanoid("bad").unwrap_err().code(), "invalid_nanoid");
+        assert_eq!(
+            inspect_snowflake("bad").unwrap_err().code(),
+            "invalid_snowflake"
         );
     }
 }
