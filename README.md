@@ -1,9 +1,10 @@
 # uuidx
 
 `uuidx` is a Rust workspace for generating, inspecting, validating, and
-formatting UUIDs from the command line. It separates UUID domain behavior from
-terminal presentation so the same policy can be used by the `uuidx` binary and
-by Rust applications through `uuidx-core`.
+formatting UUIDs. It separates UUID domain behavior from delivery concerns so
+the same policy can be used by the `uuidx` command, Rust applications through
+`uuidx-core`, JavaScript through `uuidx-wasm`, and native applications through
+the `uuidx-ffi` C ABI.
 
 The project is intentionally opinionated about generation. It generates UUID
 versions that are useful for current applications, while keeping legacy and
@@ -23,6 +24,8 @@ generation paths are rejected by the core API and by the CLI.
 - Redact time-based node identifiers while retaining their classification.
 - Inspect ULIDs when the optional `ulid-inspect` feature is enabled. ULIDs are
   never generated, validated as UUIDs, or converted by `uuidx`.
+- Use the same generation, validation, formatting, and inspection policy from
+  JavaScript or native code through focused WebAssembly and C ABI crates.
 
 ## UUID support policy
 
@@ -382,9 +385,7 @@ reference.
 ## Rust library
 
 `uuidx-core` is a separately usable Rust crate in this workspace. It owns the
-domain implementation without CLI, terminal, or JSON dependencies and can be
-exposed or deployed independently. This repository does not prescribe a
-registry, hosting service, or repository URL for that deployment.
+domain implementation without CLI, terminal, JavaScript, or C ABI dependencies.
 
 The generation enum intentionally contains only v3-v8; inspection uses a
 separate enum so legacy and reserved values can still be understood.
@@ -430,19 +431,95 @@ path, workspace, or registry selected by the deployment:
 uuidx-core = { version = "0.1", features = ["ulid-inspect"] }
 ```
 
+## WebAssembly bindings
+
+`uuidx-wasm` exposes JavaScript functions through `wasm-bindgen`:
+
+- `generateUuid(version, options?)` generates and formats v3-v8 UUIDs.
+- `validateUuid(input)` reports whether UUID text parses.
+- `formatUuid(input, format)` converts UUID text to a supported format.
+- `inspectUuid(input)` returns structured UUID metadata and bit fields.
+- `inspectUlid(input)` is available with the default `ulid-inspect` feature.
+
+The generated TypeScript declarations define the option and result shapes.
+Fallible functions throw JavaScript `Error` values with a machine-readable
+`code` property. Inspection uses hexadecimal strings for bit-field values that
+may exceed JavaScript's safe integer range.
+
+```javascript
+import init, {
+  generateUuid,
+  inspectUuid,
+  validateUuid,
+} from "./pkg/uuidx_wasm.js";
+
+await init();
+
+const value = generateUuid("v7", {
+  timestampMs: 1714430897243,
+  format: "canonical",
+});
+
+if (validateUuid(value)) {
+  const inspection = inspectUuid(value);
+  console.log(inspection.version, inspection.metadata);
+}
+```
+
+`just build-wasm` verifies the Rust artifact for its supported target. Run
+`wasm-bindgen` or a bundler that integrates it to produce the JavaScript module
+and declarations consumed above.
+
+## C API
+
+`uuidx-ffi` builds static and dynamic libraries and publishes its C interface
+in [`crates/uuidx-ffi/include/uuidx.h`](crates/uuidx-ffi/include/uuidx.h). The
+ABI exposes parsing, formatting, named namespaces, v3-v8 generation, and
+structured inspection.
+
+```c
+#include <stdio.h>
+#include <string.h>
+#include "uuidx.h"
+
+int main(void) {
+    uuidx_uuid_t uuid;
+    const char *input = "018f2c0b-6c5b-7d2e-8f4a-123456789abc";
+    uuidx_error_t *error = uuidx_uuid_parse(
+        (const uint8_t *)input, strlen(input), &uuid
+    );
+
+    if (error != NULL) {
+        fprintf(stderr, "%s\n", uuidx_error_message(error));
+        uuidx_error_free(error);
+        return 1;
+    }
+
+    return 0;
+}
+```
+
+Fallible functions return `NULL` on success or one owned `uuidx_error_t` on
+failure. Error messages are borrowed until `uuidx_error_free` releases the
+error. All UUID, inspection, and formatting buffers are caller-owned; no other
+allocations cross the ABI. `uuidx_uuid_format` supports a `NULL`/zero-capacity
+size query and reports the required size including the terminating NUL.
+
 ## Architecture
 
-The workspace has one dependency direction:
+The workspace has three adapters over one domain crate:
 
 ```text
-uuidx-cli  ->  uuidx-core  ->  uuid
+uuidx-cli  ---+
+uuidx-wasm ---+--> uuidx-core --> uuid
+uuidx-ffi  ---+
 ```
 
 `uuidx-core` owns parsing, formatting, generation, inspection, domain errors,
-and public policy. `uuidx-cli` owns Clap argument parsing, input sources,
-command orchestration, render modes, pretty presentation, JSON serialization,
-and process exit codes. The core crate does not know whether its caller is a
-terminal, a shell pipeline, or another Rust program.
+and public policy. `uuidx-cli` owns command-line input and presentation,
+`uuidx-wasm` translates the domain API into JavaScript values and errors, and
+`uuidx-ffi` owns the C ABI and cross-language memory boundary. The adapters do
+not depend on each other.
 
 Repository layout:
 
@@ -454,6 +531,11 @@ crates/
   uuidx-cli/
     src/              CLI parsing, commands, input, output, and errors
     tests/            End-to-end command tests
+  uuidx-wasm/
+    src/              WebAssembly exports and JavaScript value conversion
+  uuidx-ffi/
+    src/              C ABI exports, fixed values, and error ownership
+    include/          Public C header
 docs/
   ARCHITECTURE.md     Dependency direction and extension rules
   JSON.md             JSONL schema and metadata contract
@@ -469,6 +551,7 @@ For the module-level extension rules, see
 | ------------ | -------------- | ------- | ------------------------------------------------------------------------- |
 | `uuidx-core` | `ulid-inspect` | No      | Adds read-only ULID parsing and inspection.                               |
 | `uuidx-cli`  | `ulid-inspect` | Yes     | Enables the matching core feature and ULID inspection in `uuidx inspect`. |
+| `uuidx-wasm` | `ulid-inspect` | Yes     | Exposes read-only ULID inspection to JavaScript.                           |
 
 The feature-disabled build is part of the normal verification matrix. A build
 without default features must not silently claim ULID support.
@@ -480,6 +563,9 @@ without default features must not silently claim ULID support.
 - Rust `1.88` or newer with Cargo.
 - [Just](https://github.com/casey/just) for the repository's standard command
   interface.
+- The `wasm32-unknown-unknown` Rust target for `just build-wasm`.
+- `wasm-bindgen-test-runner` from `wasm-bindgen-cli` `0.2.127` for
+  `just test-wasm-target`; its schema must match the version in `Cargo.lock`.
 - `cargo-llvm-cov` only when generating coverage reports.
 
 Install the project, run the full local check, and exercise the CLI with:
@@ -493,23 +579,29 @@ The default `just` recipe is `just check`.
 
 ### Common recipes
 
-| Recipe           | Purpose                                                            |
-| ---------------- | ------------------------------------------------------------------ |
-| `just fmt`       | Format all Rust code.                                              |
-| `just fmt-check` | Verify formatting without modifying files.                         |
-| `just test`      | Run workspace tests with all features.                             |
-| `just test-min`  | Run workspace tests with default features disabled.                |
-| `just test-core` | Run `uuidx-core` tests with all features.                          |
-| `just test-cli`  | Run `uuidx-cli` tests with all features.                           |
-| `just test-all`  | Run both feature matrices.                                         |
-| `just lint`      | Run Clippy with all targets and all features; warnings are errors. |
-| `just lint-min`  | Run Clippy with default features disabled; warnings are errors.    |
-| `just build`     | Build the release CLI with all features.                           |
-| `just build-min` | Build the release CLI without default features.                    |
-| `just doc`       | Build workspace API documentation without dependencies.            |
-| `just smoke`     | Run representative generation and JSON inspection commands.        |
-| `just check`     | Run formatting, tests, and both lint matrices.                     |
-| `just ci`        | Run the local aggregate `check`, `build`, and `build-min` gate.     |
+| Recipe            | Purpose                                                            |
+| ----------------- | ------------------------------------------------------------------ |
+| `just fmt`        | Format all Rust code.                                              |
+| `just fmt-check`  | Verify formatting without modifying files.                         |
+| `just test`       | Run workspace tests with all features.                             |
+| `just test-min`   | Run workspace tests with default features disabled.                |
+| `just test-core`  | Run `uuidx-core` tests with all features.                          |
+| `just test-cli`   | Run `uuidx-cli` tests with all features.                           |
+| `just test-wasm`  | Run `uuidx-wasm` host tests with all features.                     |
+| `just test-wasm-target` | Run WASM exports under Node in both feature modes.          |
+| `just test-ffi`   | Run `uuidx-ffi` tests with all features.                           |
+| `just test-all`   | Run both feature matrices.                                         |
+| `just lint`       | Run Clippy with all targets and all features; warnings are errors. |
+| `just lint-min`   | Run Clippy with default features disabled; warnings are errors.    |
+| `just build`      | Build the release CLI with all features.                           |
+| `just build-min`  | Build the release CLI without default features.                    |
+| `just build-wasm` | Build `uuidx-wasm` for `wasm32-unknown-unknown`.                   |
+| `just build-wasm-min` | Build target bindings without default features.                 |
+| `just build-ffi`  | Build the release C ABI library.                                   |
+| `just doc`        | Build workspace API documentation without dependencies.           |
+| `just smoke`      | Run representative generation and JSON inspection commands.       |
+| `just check`      | Run formatting, tests, and both lint matrices.                     |
+| `just ci`         | Run `check` plus the CLI, WebAssembly, and FFI builds.             |
 
 Coverage is optional:
 
@@ -519,18 +611,24 @@ just coverage
 just coverage-lcov
 ```
 
+Both recipes merge the all-features and no-default-features host test profiles
+and enforce workspace floors of 97% line coverage, 96% function coverage, and
+96% region coverage. These reports do not include doctests; WebAssembly export
+behavior is checked separately under Node by `just test-wasm-target`.
+
 ## Automation and releases
 
 GitHub Actions runs the main CI workflow for pushes and pull requests targeting
 `main`, as well as manual runs. It checks formatting and Clippy, tests all
 features and no-default-features on Linux, Windows, and macOS, verifies the
 minimum Rust `1.88.0` toolchain, then builds the release CLI and runs smoke
-checks. The workflow uses stable Rust for the normal matrix.
+checks. It also compiles `uuidx-wasm` for `wasm32-unknown-unknown`. The workflow
+uses stable Rust for the normal matrix.
 
 Additional repository automation includes:
 
-- `coverage.yml` generates and uploads an LCOV report on pushes and pull
-  requests.
+- `coverage.yml` enforces the workspace coverage floors and uploads the merged
+  feature-matrix LCOV report on pushes and pull requests.
 - `codeql.yml` runs CodeQL security and quality analysis for Rust.
 - `dependency-review.yml` checks pull request dependency changes.
 - `scorecard.yml` runs OpenSSF supply-chain checks on the main branch and on a
@@ -540,17 +638,19 @@ Additional repository automation includes:
   `-rc[.N]` suffixes, verifies the tag against the workspace version, builds
   archives for Linux, Windows, and Intel and ARM macOS targets, generates
   provenance attestations, and publishes a GitHub release. Stable `v1.x.x`
-  releases are also published to crates.io; `0.x.x`, prerelease, and later
-  major versions remain GitHub-only.
+  releases publish all four workspace crates to crates.io in dependency order;
+  `0.x.x`, prerelease, and later major versions remain GitHub-only.
 
 ### Making changes
 
 Keep changes within the existing module boundaries. New UUID behavior belongs
 in the smallest relevant `uuidx-core` module and should receive a focused core
-test before CLI wiring is added. CLI changes should keep parsing, input,
-commands, rendering, and serialization in their current layers. Changes to
-JSON fields require updates to [`docs/JSON.md`](docs/JSON.md), serialization
-tests, and user-facing examples when applicable.
+test before adapter wiring is added. CLI changes should keep parsing, input,
+commands, rendering, and serialization in their current layers. Changes to JSON
+fields require updates to [`docs/JSON.md`](docs/JSON.md), serialization tests,
+and user-facing examples when applicable. WebAssembly and FFI changes belong
+in their adapter crates and must keep language-specific types, errors, and
+memory management outside `uuidx-core`.
 
 See [`CONTRIBUTION.md`](CONTRIBUTION.md) for the complete contributor workflow,
 testing expectations, and pull request checklist.

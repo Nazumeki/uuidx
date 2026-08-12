@@ -286,4 +286,30 @@ mod tests {
             Err(CliError::Usage(message)) if message.contains("inspect-only")
         ));
     }
+
+    #[test]
+    fn run_propagates_generation_and_renderer_errors() {
+        let mut invalid = args();
+        invalid.target = "v5".to_owned();
+        let mut output = Output::with_writers(
+            &crate::cli::GlobalOptions {
+                output: crate::cli::OutputModeArg::Plain,
+            },
+            Vec::new(),
+            Vec::new(),
+        );
+        assert!(matches!(
+            run(&invalid, &mut output),
+            Err(CliError::Usage(message)) if message.contains("requires --namespace and --name")
+        ));
+
+        let mut valid = args();
+        valid.target = "v4".to_owned();
+        let mut output = crate::output::test_output(
+            crate::cli::OutputModeArg::Plain,
+            crate::output::TestWriter::failing_write(),
+            crate::output::TestWriter::working(),
+        );
+        assert!(matches!(run(&valid, &mut output), Err(CliError::Output(_))));
+    }
 }

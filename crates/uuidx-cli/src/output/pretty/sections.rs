@@ -128,6 +128,9 @@ mod tests {
         assert!(v7_summary.contains("unix_millis"));
         assert!(!v7_summary.contains("node_id"));
 
+        let v1 = inspection("11111111-1111-1111-9111-111111111111");
+        assert!(summary("11111111-1111-1111-9111-111111111111", &v1, false).contains("node_kind"));
+
         let v6 = inspection("11111111-1111-6111-9111-111111111111");
         let unredacted = summary("11111111-1111-6111-9111-111111111111", &v6, false);
         assert!(unredacted.contains("clock_sequence"));
@@ -173,19 +176,21 @@ mod tests {
     #[test]
     fn summary_detects_all_supported_input_formats() {
         let cases = [
-            ("  URN:UUID:018f2c0b-6c5b-7d2e-8f4a-123456789abc ", "urn"),
-            ("{018f2c0b-6c5b-7d2e-8f4a-123456789abc}", "braced"),
-            ("018f2c0b-6c5b-7d2e-8f4a-123456789abc", "canonical"),
-            ("018f2c0b6c5b7d2e8f4a123456789abc", "simple"),
+            (
+                "  URN:UUID:018f2c0b-6c5b-7d2e-8f4a-123456789abc ",
+                UuidOutputFormat::Urn,
+            ),
+            (
+                "{018f2c0b-6c5b-7d2e-8f4a-123456789abc}",
+                UuidOutputFormat::Braced,
+            ),
+            (
+                "018f2c0b-6c5b-7d2e-8f4a-123456789abc",
+                UuidOutputFormat::Canonical,
+            ),
+            ("018f2c0b6c5b7d2e8f4a123456789abc", UuidOutputFormat::Simple),
         ];
         for (input, expected) in cases {
-            let expected = match expected {
-                "urn" => UuidOutputFormat::Urn,
-                "braced" => UuidOutputFormat::Braced,
-                "canonical" => UuidOutputFormat::Canonical,
-                "simple" => UuidOutputFormat::Simple,
-                _ => unreachable!(),
-            };
             assert_eq!(input_format(input), expected);
         }
     }

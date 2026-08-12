@@ -44,6 +44,7 @@ mod tests {
         Command, ConvertArgs, GenerateArgs, GlobalOptions, InputArgs, InspectArgs, InspectKindArg,
         OutputModeArg, UuidFormatArg, ValidateArgs,
     };
+    use crate::errors::CliError;
 
     const UUID: &str = "018f2c0b-6c5b-7d2e-8f4a-123456789abc";
 
@@ -135,5 +136,21 @@ mod tests {
         }));
         cli.global.output = OutputModeArg::Plain;
         assert!(matches!(run(cli), AppResult::Success));
+    }
+
+    #[test]
+    fn flush_failures_override_a_successful_command() {
+        let output = crate::output::test_output(
+            OutputModeArg::Plain,
+            crate::output::TestWriter::failing_flush(),
+            crate::output::TestWriter::working(),
+        );
+        let result = run_with_output(
+            cli(Command::Validate(ValidateArgs {
+                input: input(&[UUID]),
+            })),
+            output,
+        );
+        assert!(matches!(result, AppResult::Failure(CliError::Output(_))));
     }
 }

@@ -12,11 +12,12 @@ The repository follows these principles:
 
 - Keep the smallest implementation that completely satisfies the current
   requirement.
-- Grow functionality in working layers: core behavior, focused tests, CLI
+- Grow functionality in working layers: core behavior, focused tests, adapter
   wiring, presentation, and documentation.
-- Keep the dependency direction one way: `uuidx-cli -> uuidx-core -> uuid`.
-- Put domain rules in `uuidx-core`; keep terminal, input, process, and JSON
-  concerns in `uuidx-cli`.
+- Keep all adapters dependent on `uuidx-core`, never on each other.
+- Put domain rules in `uuidx-core`; keep terminal and process concerns in
+  `uuidx-cli`, JavaScript conversion in `uuidx-wasm`, and C ABI ownership in
+  `uuidx-ffi`.
 - Prefer existing dependencies and local patterns over new abstractions or
   duplicate implementations.
 - Do not add compatibility layers for obsolete paths. If a behavior is no
@@ -61,13 +62,21 @@ cargo --version
 
 Install [Just](https://github.com/casey/just) for the repository's canonical
 recipes. The project does not require a global toolchain beyond Rust, Just, and
-the optional `cargo-llvm-cov` coverage tool.
+the optional `cargo-llvm-cov` coverage tool. Install the WebAssembly target
+before running the full local CI recipe:
+
+```console
+rustup target add wasm32-unknown-unknown
+cargo install wasm-bindgen-cli --version 0.2.127 --locked
+```
 
 The workspace contains:
 
 ```text
 crates/uuidx-core/       UUID domain library and core integration tests
 crates/uuidx-cli/        CLI binary, command tests, and presentation layers
+crates/uuidx-wasm/       WebAssembly exports and JavaScript conversion
+crates/uuidx-ffi/        C ABI library and public header
 docs/                    Architecture and JSON contract documentation
 justfile                Shared local and CI commands
 ```
@@ -185,6 +194,18 @@ When changing JSON fields or metadata:
 5. Prefer additive fields and tolerant consumers, but do not add compatibility
    serializers or duplicate schemas for obsolete behavior.
 
+### WebAssembly and C ABI adapters
+
+`uuidx-wasm` and `uuidx-ffi` translate the core API at language boundaries.
+They must not duplicate UUID parsing, generation, formatting, inspection, or
+policy logic from `uuidx-core`.
+
+WebAssembly changes should use JavaScript-native values, preserve structured
+error codes, and compile for `wasm32-unknown-unknown`. FFI changes must keep the
+public header synchronized with the Rust exports and make allocation ownership
+explicit. New exported functions require focused adapter tests and public usage
+documentation.
+
 ## Testing and verification
 
 The root `justfile` is the canonical test and verification interface.
@@ -197,15 +218,21 @@ The root `justfile` is the canonical test and verification interface.
 | `just test-min` | Workspace tests with default features disabled. |
 | `just test-core` | Core crate tests with all features. |
 | `just test-cli` | CLI crate tests with all features. |
+| `just test-wasm` | WebAssembly adapter host tests with all features. |
+| `just test-wasm-target` | WebAssembly exports under Node in both feature modes. |
+| `just test-ffi` | C ABI adapter tests with all features. |
 | `just test-all` | Both feature matrices. |
 | `just lint` | Clippy for all workspace targets and features with `-D warnings`. |
 | `just lint-min` | Clippy with default features disabled and `-D warnings`. |
 | `just build` | Release CLI build with all features. |
 | `just build-min` | Release CLI build without default features. |
+| `just build-wasm` | `uuidx-wasm` build for `wasm32-unknown-unknown`. |
+| `just build-wasm-min` | Target build without default features. |
+| `just build-ffi` | Release C ABI library build. |
 | `just doc` | Workspace API documentation without dependency docs. |
 | `just smoke` | Representative generation and JSON inspection commands. |
 | `just check` | Formatting, tests, and both lint matrices. |
-| `just ci` | Run the local aggregate `check`, `build`, and `build-min` gate before review. |
+| `just ci` | Run `check` plus the CLI, WebAssembly, and FFI builds before review. |
 
 During development, use the narrowest useful check first:
 
@@ -231,6 +258,11 @@ just coverage
 just coverage-lcov
 ```
 
+The coverage recipes merge the all-features and no-default-features host test
+profiles. They enforce workspace floors of 97% for lines and 96% for functions
+and regions. The report excludes doctests; `just test-wasm-target` separately
+executes the WebAssembly exports under Node.
+
 ### Test expectations by change type
 
 - Core parsing, formatting, generation, or inspection changes need focused
@@ -245,6 +277,9 @@ just coverage-lcov
   records, metadata families, and redaction when relevant.
 - Feature-gated changes need both `just test` and `just test-min`, plus the
   corresponding lint and build checks.
+- WebAssembly changes need host tests, `just test-wasm-target`, and
+  `just build-wasm`; FFI changes need adapter tests, `just build-ffi`, and a
+  header/API consistency review.
 - Documentation-only changes should still be checked for stale commands,
   broken relative links, and examples that contradict `--help` or tests.
 
@@ -270,8 +305,8 @@ Before requesting review, confirm:
 
 - [ ] The change is scoped to the current requirement and does not add a
       speculative abstraction or compatibility path.
-- [ ] Core rules remain in `uuidx-core` and CLI presentation remains in
-      `uuidx-cli`.
+- [ ] Core rules remain in `uuidx-core`; CLI, JavaScript, and C ABI concerns
+      remain in their adapter crates.
 - [ ] Tests cover the changed behavior and relevant error paths.
 - [ ] Both default-feature and no-default-feature checks pass when applicable.
 - [ ] Plain and JSON output remain machine-safe when affected.
@@ -286,8 +321,9 @@ Before requesting review, confirm:
 The main GitHub Actions workflow additionally runs formatting, Clippy, and the
 all-feature and minimal-feature test matrix on Linux, Windows, and macOS. It
 also verifies the minimum Rust `1.88.0` toolchain before the release build and
-smoke checks. Separate workflows cover coverage, CodeQL, dependency review,
-supply-chain checks, and tagged release packaging.
+smoke checks, and compiles `uuidx-wasm` for `wasm32-unknown-unknown`. Separate
+workflows cover coverage, CodeQL, dependency review, supply-chain checks, and
+tagged release packaging for all four crates.
 
 ## Review expectations
 
@@ -302,6 +338,8 @@ Reviews prioritize correctness and contract clarity:
    their maintenance cost.
 6. Documentation must describe behavior that exists today, including limits and
    feature flags.
+7. Language bindings must preserve the core policy and define their error and
+   memory contracts precisely.
 
 ## License
 

@@ -177,6 +177,16 @@ fn generators_reject_options_outside_their_contracts() {
     v3.name = Some(b"uuidx".to_vec());
     v3.node = Some([0; 6]);
     assert_unexpected(v3, "--node");
+    let mut v3 = GenerationOptions::new(GeneratableUuidVersion::V3);
+    v3.namespace = Some(Uuid::NAMESPACE_DNS);
+    v3.name = Some(b"uuidx".to_vec());
+    v3.timestamp = Some(UNIX_EPOCH);
+    assert_unexpected(v3, "--timestamp");
+    let mut v3 = GenerationOptions::new(GeneratableUuidVersion::V3);
+    v3.namespace = Some(Uuid::NAMESPACE_DNS);
+    v3.name = Some(b"uuidx".to_vec());
+    v3.custom = Some([0; 16]);
+    assert_unexpected(v3, "--custom");
 
     let mut v6 = GenerationOptions::new(GeneratableUuidVersion::V6);
     v6.namespace = Some(Uuid::NAMESPACE_DNS);
@@ -351,6 +361,15 @@ fn public_format_and_type_contracts_are_stable() {
         "{018f2c0b-6c5b-7d2e-8f4a-123456789abc}"
     );
 
+    for (format, expected) in [
+        (UuidOutputFormat::Canonical, "canonical"),
+        (UuidOutputFormat::Simple, "simple"),
+        (UuidOutputFormat::Urn, "urn"),
+        (UuidOutputFormat::Braced, "braced"),
+    ] {
+        assert_eq!(format.to_string(), expected);
+    }
+
     for (version, expected) in [
         (GeneratableUuidVersion::V3, "v3"),
         (GeneratableUuidVersion::V4, "v4"),
@@ -441,6 +460,7 @@ fn parser_and_format_enums_cover_aliases_and_errors() {
     assert_eq!(InspectableUuidVersion::V1.number(), Some(1));
     assert_eq!(InspectableUuidVersion::Nil.number(), Some(0));
     assert_eq!(InspectableUuidVersion::Max.number(), Some(15));
+    assert_eq!(InspectableUuidVersion::Unknown(9).number(), Some(9));
     assert_eq!(InspectableUuidVersion::Unknown(9).to_string(), "unknown(9)");
 
     for (value, expected) in [

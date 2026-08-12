@@ -164,6 +164,22 @@ mod tests {
             records,
             vec![(0, "first".to_owned()), (1, "second".to_owned())]
         );
+
+        let mut records = Vec::new();
+        let summary = process_reader(
+            Cursor::new("first\nsecond\nthird\n"),
+            true,
+            |index, value| {
+                records.push((index, value.to_owned()));
+                Ok(value == "second")
+            },
+        )
+        .unwrap();
+        assert!(summary.data_errors);
+        assert_eq!(
+            records,
+            vec![(0, "first".to_owned()), (1, "second".to_owned())]
+        );
     }
 
     #[test]
@@ -213,6 +229,15 @@ mod tests {
                 Err(CliError::Usage("callback failed".to_owned()))
             }),
             Err(CliError::Usage(message)) if message == "callback failed"
+        ));
+    }
+
+    #[test]
+    fn reader_errors_are_reported_as_input_failures() {
+        let bytes = [b'v', 0xff, b'\n'];
+        assert!(matches!(
+            process_reader(Cursor::new(bytes), false, |_, _| Ok(false)),
+            Err(CliError::Input(_))
         ));
     }
 }

@@ -39,11 +39,11 @@ jobs:
           fi
 
           metadata="$(cargo metadata --locked --no-deps --format-version 1)"
-          package_count="$(jq '[.packages[] | select(.name == "uuidx-core" or .name == "uuidx-cli")] | length' <<<"$metadata")"
-          version_count="$(jq '[.packages[] | select(.name == "uuidx-core" or .name == "uuidx-cli") | .version] | unique | length' <<<"$metadata")"
+          package_count="$(jq '[.packages[] | select(.name == "uuidx-core" or .name == "uuidx-cli" or .name == "uuidx-wasm" or .name == "uuidx-ffi")] | length' <<<"$metadata")"
+          version_count="$(jq '[.packages[] | select(.name == "uuidx-core" or .name == "uuidx-cli" or .name == "uuidx-wasm" or .name == "uuidx-ffi") | .version] | unique | length' <<<"$metadata")"
           version="$(jq -r '.packages[] | select(.name == "uuidx-cli") | .version' <<<"$metadata")"
 
-          test "$package_count" -eq 2
+          test "$package_count" -eq 4
           test "$version_count" -eq 1
           test "v$version" = "$GITHUB_REF_NAME"
 
@@ -193,4 +193,9 @@ jobs:
       - name: Publish workspace packages
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: cargo publish --locked --workspace
+        run: |
+          cargo publish --locked \
+            --package uuidx-core \
+            --package uuidx-cli \
+            --package uuidx-wasm \
+            --package uuidx-ffi

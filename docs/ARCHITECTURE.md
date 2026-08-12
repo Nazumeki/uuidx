@@ -1,13 +1,16 @@
 # Architecture
 
-`uuidx` is a two-crate workspace with a one-way dependency:
+`uuidx` is a four-crate workspace with three adapters over one domain crate:
 
 ```text
-uuidx-cli  ->  uuidx-core  ->  uuid crate
+uuidx-cli  ---+
+uuidx-wasm ---+--> uuidx-core --> uuid crate
+uuidx-ffi  ---+
 ```
 
-The core crate does not know whether a caller is a terminal, a shell pipeline,
-or another Rust program. The CLI crate does not implement UUID bit rules.
+The adapters do not depend on each other. The core crate does not know whether
+a caller is a terminal, JavaScript, C, or another Rust program, and no adapter
+implements UUID bit rules.
 
 ## Core crate
 
@@ -55,7 +58,23 @@ renderer decides whether the result is plain, pretty, or JSON. This keeps
 terminal styling out of the UUID implementation and prevents ANSI formatting
 from leaking into pipeline or JSON output.
 
-## Data flow
+## WebAssembly crate
+
+`uuidx-wasm` exports the core generation, validation, formatting, and
+inspection operations through `wasm-bindgen`. It converts JavaScript option
+objects and result objects at the boundary, represents wide numeric inspection
+fields without losing precision, and maps domain failures to JavaScript errors
+with stable codes. Optional ULID inspection follows the core feature gate.
+
+## FFI crate
+
+`uuidx-ffi` exposes a C ABI for the same core operations. It enforces its
+null-pointer, length, UTF-8, and value contracts, converts domain results into
+ABI-safe values, and owns the error allocation/freeing contract. Its public
+header is part of the exported interface and must stay synchronized with the
+Rust symbols.
+
+## CLI data flow
 
 ```text
 arguments / piped stdin / file
@@ -89,10 +108,13 @@ When adding a UUID feature:
 4. Keep CLI parsing, input, rendering, and serialization in their existing
    boundaries.
 5. Update the JSON contract and documentation when output fields change.
+6. Keep JavaScript conversion and error mapping in `uuidx-wasm`.
+7. Keep C layout, ownership, and error handling in `uuidx-ffi`, and update its
+   header with every exported ABI change.
 
 Avoid central registries, compatibility adapters, and speculative plugin
-layers. The current dependency direction is enough to support a library caller,
-the CLI, and future output consumers without coupling those concerns.
+layers. The current dependency direction supports Rust, CLI, JavaScript, and C
+callers without coupling their presentation and ownership concerns.
 
 ## Development interface
 
@@ -100,4 +122,5 @@ The root `justfile` is the canonical local entry point for formatting, both
 feature matrices, linting, release builds, smoke checks, and optional coverage
 reports. GitHub Actions runs the equivalent Cargo checks directly, adds the
 minimum Rust 1.88 verification and an operating-system feature matrix, and
-then performs the release build and smoke checks.
+then performs the release build and smoke checks. A dedicated job also compiles
+`uuidx-wasm` for `wasm32-unknown-unknown`.

@@ -89,6 +89,31 @@ jobs:
       - name: Test at the minimum supported Rust version
         run: cargo test --locked --workspace --all-features
 
+  wasm:
+    name: WebAssembly target
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+        with:
+          toolchain: stable
+          targets: wasm32-unknown-unknown
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Build WebAssembly bindings
+        run: cargo build --locked --package uuidx-wasm --target wasm32-unknown-unknown --all-features
+      - name: Build WebAssembly bindings without default features
+        run: cargo build --locked --package uuidx-wasm --target wasm32-unknown-unknown --no-default-features
+
   test:
     name: Test (${{ matrix.os }}, ${{ matrix.features }})
     runs-on: ${{ matrix.os }}
@@ -132,6 +157,7 @@ jobs:
       - lint
       - msrv
       - test
+      - wasm
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:

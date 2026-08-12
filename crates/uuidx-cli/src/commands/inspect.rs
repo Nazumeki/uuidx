@@ -135,4 +135,64 @@ mod tests {
         );
         assert!(run(&args, &mut output).unwrap());
     }
+
+    #[test]
+    fn run_propagates_success_and_error_renderer_failures() {
+        let valid = InspectArgs {
+            input: InputArgs {
+                values: vec![UUID.to_owned()],
+                input: None,
+                fail_fast: false,
+            },
+            kind: InspectKindArg::Uuid,
+            layout: false,
+            redact_sensitive: false,
+        };
+        let mut output = crate::output::test_output(
+            OutputModeArg::Plain,
+            crate::output::TestWriter::failing_write(),
+            crate::output::TestWriter::working(),
+        );
+        assert!(matches!(run(&valid, &mut output), Err(CliError::Output(_))));
+
+        let invalid = InspectArgs {
+            input: InputArgs {
+                values: vec!["not-an-identifier".to_owned()],
+                input: None,
+                fail_fast: false,
+            },
+            kind: InspectKindArg::Auto,
+            layout: false,
+            redact_sensitive: false,
+        };
+        let mut output = crate::output::test_output(
+            OutputModeArg::Plain,
+            crate::output::TestWriter::working(),
+            crate::output::TestWriter::failing_write(),
+        );
+        assert!(matches!(
+            run(&invalid, &mut output),
+            Err(CliError::Output(_))
+        ));
+
+        #[cfg(feature = "ulid-inspect")]
+        {
+            let ulid = InspectArgs {
+                input: InputArgs {
+                    values: vec!["01ARZ3NDEKTSV4RRFFQ69G5FAV".to_owned()],
+                    input: None,
+                    fail_fast: false,
+                },
+                kind: InspectKindArg::Ulid,
+                layout: false,
+                redact_sensitive: false,
+            };
+            let mut output = crate::output::test_output(
+                OutputModeArg::Plain,
+                crate::output::TestWriter::failing_write(),
+                crate::output::TestWriter::working(),
+            );
+            assert!(matches!(run(&ulid, &mut output), Err(CliError::Output(_))));
+        }
+    }
 }

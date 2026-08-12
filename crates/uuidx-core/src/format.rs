@@ -46,15 +46,7 @@ pub fn format_uuid(uuid: &Uuid, format: UuidOutputFormat) -> String {
 
 pub fn parse_hex_array<const N: usize>(input: &str) -> Result<[u8; N], HexError> {
     let trimmed = input.trim();
-    let bytes = hex::decode(trimmed).map_err(|error| match error {
-        hex::FromHexError::InvalidHexCharacter { index, .. } => HexError::Invalid { offset: index },
-        hex::FromHexError::OddLength => HexError::Invalid {
-            offset: trimmed.len().saturating_sub(1),
-        },
-        hex::FromHexError::InvalidStringLength => HexError::Invalid {
-            offset: trimmed.len(),
-        },
-    })?;
+    let bytes = hex::decode(trimmed).map_err(|error| map_hex_error(error, trimmed.len()))?;
 
     if bytes.len() != N {
         return Err(HexError::WrongLength {
@@ -66,4 +58,44 @@ pub fn parse_hex_array<const N: usize>(input: &str) -> Result<[u8; N], HexError>
     let mut output = [0u8; N];
     output.copy_from_slice(&bytes);
     Ok(output)
+}
+
+fn map_hex_error(error: hex::FromHexError, input_length: usize) -> HexError {
+    match error {
+        hex::FromHexError::InvalidHexCharacter { index, .. } => HexError::Invalid { offset: index },
+        hex::FromHexError::OddLength => HexError::Invalid {
+            offset: input_length.saturating_sub(1),
+        },
+        hex::FromHexError::InvalidStringLength => HexError::Invalid {
+            offset: input_length,
+        },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn maps_every_hex_decoder_error_shape() {
+        assert_eq!(
+            map_hex_error(
+                hex::FromHexError::InvalidHexCharacter { c: 'z', index: 2 },
+                4,
+            ),
+            HexError::Invalid { offset: 2 }
+        );
+        assert_eq!(
+            map_hex_error(hex::FromHexError::OddLength, 3),
+            HexError::Invalid { offset: 2 }
+        );
+        assert_eq!(
+            map_hex_error(hex::FromHexError::OddLength, 0),
+            HexError::Invalid { offset: 0 }
+        );
+        assert_eq!(
+            map_hex_error(hex::FromHexError::InvalidStringLength, 4),
+            HexError::Invalid { offset: 4 }
+        );
+    }
 }
