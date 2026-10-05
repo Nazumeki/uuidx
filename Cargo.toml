@@ -5,6 +5,8 @@ members = [
     "crates/uuidx-wasm",
     "crates/uuidx-ffi",
 ]
+# cargo-fuzz needs nightly; keep it out of the stable workspace used by CI.
+exclude = ["fuzz"]
 resolver = "3"
 
 [workspace.package]

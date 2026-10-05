@@ -1,0 +1,29 @@
+[package]
+name = "uuidx-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+uuidx-core = { path = "../crates/uuidx-core", features = ["ulid-inspect"] }
+
+[[bin]]
+name = "parse_uuid"
+path = "fuzz_targets/parse_uuid.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "inspect_identifier"
+path = "fuzz_targets/inspect_identifier.rs"
+test = false
+doc = false
+bench = false
+
+[profile.release]
+debug = 1
