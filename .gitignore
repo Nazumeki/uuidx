@@ -22,3 +22,9 @@ target
 
 .claude
 .omo
+
+# cargo-fuzz generated data (target/ is ignored above)
+fuzz/artifacts
+fuzz/coverage
+fuzz/corpus
+fuzz/Cargo.lock

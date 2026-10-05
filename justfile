@@ -70,6 +70,10 @@ smoke:
     cargo run --quiet -p uuidx-cli --all-features -- generate v4 --output plain
     cargo run --quiet -p uuidx-cli --all-features -- inspect 018f2c0b-6c5b-7d2e-8f4a-123456789abc --output json
 
+# Requires cargo-fuzz (`cargo install cargo-fuzz`) and a nightly toolchain.
+fuzz:
+    cargo fuzz run parse_uuid
+
 check: fmt-check test-all lint lint-min
 
 ci: check test-wasm-target build build-min build-wasm build-wasm-min build-ffi
