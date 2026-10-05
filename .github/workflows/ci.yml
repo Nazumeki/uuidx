@@ -2,14 +2,14 @@ name: CI
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
+  workflow_call:
 
-permissions: {}
+permissions:
+  contents: read
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -19,12 +19,10 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  fmt:
-    name: Rustfmt
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
+  checks:
+    name: Formatting and Clippy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -34,30 +32,9 @@ jobs:
         uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
         with:
           toolchain: stable
-          components: rustfmt
-      - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
-        with:
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          components: rustfmt, clippy
       - name: Check formatting
         run: cargo fmt --all -- --check
-
-  lint:
-    name: Clippy
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    permissions:
-      contents: read
-    steps:
-      - name: Check out source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
-        with:
-          toolchain: stable
-          components: clippy
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
@@ -67,12 +44,18 @@ jobs:
       - name: Lint without default features
         run: cargo clippy --locked --workspace --all-targets --no-default-features -- -D warnings
 
-  msrv:
-    name: Minimum Rust (1.88)
-    runs-on: ubuntu-latest
+  test:
+    name: Test (${{ matrix.os }}, Rust ${{ matrix.rust }})
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 30
-    permissions:
-      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest, macos-15]
+        rust: [stable]
+        include:
+          - os: ubuntu-24.04
+            rust: 1.88.0
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -81,20 +64,29 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
         with:
-          toolchain: 1.88.0
+          toolchain: ${{ matrix.rust }}
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
+          shared-key: ci-${{ matrix.os }}
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - name: Test at the minimum supported Rust version
+      - name: Test all features
         run: cargo test --locked --workspace --all-features
+      - name: Test without default features
+        run: cargo test --locked --workspace --no-default-features
+      - name: Build and smoke test release binary
+        if: matrix.os == 'ubuntu-24.04' && matrix.rust == 'stable'
+        run: |
+          cargo build --locked --release --package uuidx-cli --all-features
+          target/release/uuidx generate v4 --output plain
+          target/release/uuidx inspect 018f2c0b-6c5b-7d2e-8f4a-123456789abc --output json
 
   wasm:
-    name: WebAssembly target
-    runs-on: ubuntu-latest
+    name: WebAssembly tests
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
-    permissions:
-      contents: read
+    env:
+      WASM_BINDGEN_BENCH_RESULT: target/wbg_benchmark.json
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -109,75 +101,68 @@ jobs:
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - name: Build WebAssembly bindings
-        run: cargo build --locked --package uuidx-wasm --target wasm32-unknown-unknown --all-features
-      - name: Build WebAssembly bindings without default features
-        run: cargo build --locked --package uuidx-wasm --target wasm32-unknown-unknown --no-default-features
-
-  test:
-    name: Test (${{ matrix.os }}, ${{ matrix.features }})
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - ubuntu-latest
-          - windows-latest
-          - macos-latest
-        features:
-          - all
-          - minimal
-    permissions:
-      contents: read
-    steps:
-      - name: Check out source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
-        with:
-          toolchain: stable
-      - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
-        with:
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-      - name: Test all features
-        if: matrix.features == 'all'
-        run: cargo test --locked --workspace --all-features
-      - name: Test without default features
-        if: matrix.features == 'minimal'
-        run: cargo test --locked --workspace --no-default-features
-
-  build:
-    name: Build and smoke test
-    needs:
-      - fmt
-      - lint
-      - msrv
-      - test
-      - wasm
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    permissions:
-      contents: read
-    steps:
-      - name: Check out source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
-        with:
-          toolchain: stable
-      - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
-        with:
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-      - name: Build release binary
-        run: cargo build --locked --release -p uuidx-cli --all-features
-      - name: Run CLI smoke checks
+      - name: Read wasm-bindgen version from Cargo.lock
+        id: wasm_bindgen
+        shell: python
         run: |
-          cargo run --locked --quiet -p uuidx-cli --all-features -- generate v4 --output plain
-          cargo run --locked --quiet -p uuidx-cli --all-features -- inspect 018f2c0b-6c5b-7d2e-8f4a-123456789abc --output json
+          import os
+          import tomllib
+
+          with open("Cargo.lock", "rb") as lockfile:
+              packages = tomllib.load(lockfile)["package"]
+          version, = [package["version"] for package in packages if package["name"] == "wasm-bindgen"]
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              print(f"version={version}", file=output)
+      - name: Install wasm-bindgen test runner
+        uses: taiki-e/install-action@7f4eb899022d8fe70b20c4f3de697aa85c309026 # v2
+        with:
+          tool: wasm-bindgen@${{ steps.wasm_bindgen.outputs.version }}
+      - name: Test WebAssembly exports
+        run: cargo test --locked --package uuidx-wasm --target wasm32-unknown-unknown --all-features
+      - name: Test WebAssembly exports without default features
+        run: cargo test --locked --package uuidx-wasm --target wasm32-unknown-unknown --no-default-features
+
+  coverage:
+    name: Rust coverage
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+        with:
+          toolchain: stable
+          components: llvm-tools-preview
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@7f4eb899022d8fe70b20c4f3de697aa85c309026 # v2
+        with:
+          tool: cargo-llvm-cov
+      - name: Collect coverage in both feature modes
+        run: |
+          cargo llvm-cov clean --workspace
+          mkdir -p target/coverage
+          cargo llvm-cov --locked --workspace --all-features --no-report
+          cargo llvm-cov --locked --workspace --no-default-features --no-report
+      - name: Enforce coverage thresholds and generate LCOV report
+        run: >-
+          cargo llvm-cov report
+          --ignore-filename-regex 'uuidx-wasm[/\\]src[/\\]lib\.rs$'
+          --fail-under-lines 97
+          --fail-under-functions 96
+          --fail-under-regions 96
+          --lcov
+          --output-path target/coverage/lcov.info
+      - name: Upload LCOV report
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-lcov
+          path: target/coverage/lcov.info
+          if-no-files-found: error
+          retention-days: 14

@@ -7,13 +7,21 @@ on:
 
 permissions: {}
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
   verify_tag:
     name: Verify release version
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read
@@ -27,7 +35,6 @@ jobs:
           persist-credentials: false
       - name: Validate tag and workspace versions
         id: version
-        shell: bash
         run: |
           set -euo pipefail
           tag_pattern='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-(beta|rc)(\.(0|[1-9][0-9]*))?)?$'
@@ -39,13 +46,8 @@ jobs:
           fi
 
           metadata="$(cargo metadata --locked --no-deps --format-version 1)"
-          package_count="$(jq '[.packages[] | select(.name == "uuidx-core" or .name == "uuidx-cli" or .name == "uuidx-wasm" or .name == "uuidx-ffi")] | length' <<<"$metadata")"
-          version_count="$(jq '[.packages[] | select(.name == "uuidx-core" or .name == "uuidx-cli" or .name == "uuidx-wasm" or .name == "uuidx-ffi") | .version] | unique | length' <<<"$metadata")"
-          version="$(jq -r '.packages[] | select(.name == "uuidx-cli") | .version' <<<"$metadata")"
-
-          test "$package_count" -eq 4
-          test "$version_count" -eq 1
-          test "v$version" = "$GITHUB_REF_NAME"
+          version="${GITHUB_REF_NAME#v}"
+          jq -e --arg version "$version" 'all(.packages[]; .version == $version)' <<<"$metadata"
 
           if [[ "$version" == *-* ]]; then
             prerelease=true
@@ -62,14 +64,23 @@ jobs:
           echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
           echo "publish_cargo=$publish_cargo" >> "$GITHUB_OUTPUT"
 
+  checks:
+    name: CI
+    needs: verify_tag
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ci.yml
+
   build:
     name: Build ${{ matrix.target }}
-    needs: verify_tag
+    needs:
+      - verify_tag
+      - checks
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
+          - os: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
           - os: windows-latest
             target: x86_64-pc-windows-msvc
@@ -94,19 +105,16 @@ jobs:
         uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
         with:
           toolchain: stable
-      - name: Cache Rust dependencies
+          targets: ${{ matrix.target }}
+      - name: Restore Rust cache
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-      - name: Build release binary
-        run: cargo build --locked --release --package uuidx-cli --target "$env:TARGET" --all-features
-        if: runner.os == 'Windows'
+          shared-key: ci-${{ matrix.os }}
+          save-if: false
       - name: Build release binary
         run: cargo build --locked --release --package uuidx-cli --target "$TARGET" --all-features
-        if: runner.os != 'Windows'
       - name: Package Unix binary
         if: runner.os != 'Windows'
-        shell: bash
         run: |
           set -euo pipefail
           mkdir -p dist
@@ -137,7 +145,7 @@ jobs:
     needs:
       - verify_tag
       - build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: write
@@ -150,14 +158,12 @@ jobs:
           merge-multiple: true
       - name: Generate checksums
         working-directory: dist
-        shell: bash
         run: sha256sum uuidx-* > SHA256SUMS
       - name: Publish GitHub release
         env:
           GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
           PRERELEASE: ${{ needs.verify_tag.outputs.prerelease }}
-        shell: bash
         run: |
           args=(
             "$GITHUB_REF_NAME"
@@ -167,7 +173,7 @@ jobs:
             --title "uuidx $GITHUB_REF_NAME"
           )
           if [[ "$PRERELEASE" == true ]]; then
-            args+=(--prerelease)
+            args+=(--prerelease --latest=false)
           fi
           gh release create "${args[@]}"
 
@@ -177,7 +183,7 @@ jobs:
     needs:
       - verify_tag
       - github_release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
       contents: read
@@ -193,9 +199,4 @@ jobs:
       - name: Publish workspace packages
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: |
-          cargo publish --locked \
-            --package uuidx-core \
-            --package uuidx-cli \
-            --package uuidx-wasm \
-            --package uuidx-ffi
+        run: cargo publish --locked --workspace

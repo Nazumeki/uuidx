@@ -323,12 +323,14 @@ Before requesting review, confirm:
 - [ ] The pull request explains the motivation, implementation boundary, tests
       run, and any user-visible behavior change.
 
-The main GitHub Actions workflow additionally runs formatting, Clippy, and the
-all-feature and minimal-feature test matrix on Linux, Windows, and macOS. It
-also verifies the minimum Rust `1.88.0` toolchain before the release build and
-smoke checks, and compiles `uuidx-wasm` for `wasm32-unknown-unknown`. Separate
-workflows cover coverage, CodeQL, dependency review, supply-chain checks, and
-tagged release packaging for all four crates.
+The main GitHub Actions workflow runs formatting, Clippy, and both feature
+modes on Linux, Windows, and macOS, including the minimum Rust `1.88.0`
+toolchain on Linux. It also smoke-tests the release binary, runs WebAssembly
+exports under Node using the wasm-bindgen version from `Cargo.lock`, and
+enforces the coverage floors above. Separate workflows cover CodeQL,
+dependency review, supply-chain checks, and tagged CLI release packaging.
+The release workflow publishes all four workspace crates to crates.io for
+stable `1.x` tags.
 
 ## Review expectations
 

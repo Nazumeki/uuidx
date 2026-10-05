@@ -1,18 +1,20 @@
 # uuidx
 
-[![GitHub Stars](https://www.shieldcn.dev/github/stars/Nazumeki/uuidx.svg?variant=secondary&size=sm)](https://github.com/Nazumeki/uuidx/stargazers)
-[![GitHub Forks](https://www.shieldcn.dev/github/forks/Nazumeki/uuidx.svg?variant=secondary&size=sm)](https://github.com/Nazumeki/uuidx/forks)
-[![License](https://www.shieldcn.dev/github/license/Nazumeki/uuidx.svg?variant=secondary&size=sm)](LICENSE)
-[![Release](https://www.shieldcn.dev/github/release/Nazumeki/uuidx.svg?variant=secondary&size=sm)](https://github.com/Nazumeki/uuidx/releases/latest)
-[![CI](https://www.shieldcn.dev/github/ci/Nazumeki/uuidx.svg?variant=secondary&size=sm)](https://github.com/Nazumeki/uuidx/actions/workflows/ci.yml)
+[English](README.md) · [简体中文](README.zh-CN.md)
 
-[![Commits](https://www.shieldcn.dev/github/commits/Nazumeki/uuidx.svg?variant=secondary&size=sm)](https://github.com/Nazumeki/uuidx/commits)
-[![Open issues](https://www.shieldcn.dev/github/open-issues/Nazumeki/uuidx.svg?variant=secondary&size=sm)](https://github.com/Nazumeki/uuidx/issues)
-[![Open PRs](https://www.shieldcn.dev/github/open-prs/Nazumeki/uuidx.svg?variant=secondary&size=sm)](https://github.com/Nazumeki/uuidx/pulls)
+[![CI](https://img.shields.io/github/actions/workflow/status/Nazumeki/uuidx/ci.yml?style=for-the-badge&logo=githubactions&logoColor=white&label=CI)](https://github.com/Nazumeki/uuidx/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/Nazumeki/uuidx?style=for-the-badge&logo=github&logoColor=white&label=release)](https://github.com/Nazumeki/uuidx/releases/latest)
+[![crates.io](https://img.shields.io/crates/v/uuidx-cli?style=for-the-badge&logo=rust&logoColor=white&label=crates.io)](https://crates.io/crates/uuidx-cli)
 
-[![Rust](https://img.shields.io/badge/Rust-1.88%2B-000000?logo=rust&logoColor=white&style=flat)](https://www.rust-lang.org/)
-[![crates.io](https://img.shields.io/crates/v/uuidx-cli?logo=rust&logoColor=white=flat)](https://crates.io/crates/uuidx-cli)
-[![coverage](https://img.shields.io/badge/test%20coverage-%E2%89%A597-2ea44f=flat)](https://github.com/Nazumeki/uuidx/actions/workflows/coverage.yml)
+[![Rust](https://img.shields.io/badge/Rust-1.88%2B-000000?style=for-the-badge&logo=rust&logoColor=white)](https://www.rust-lang.org/)
+[![Coverage](https://img.shields.io/badge/coverage-%E2%89%A597%25-brightgreen?style=for-the-badge)](https://github.com/Nazumeki/uuidx/actions/workflows/ci.yml)
+[![License](https://img.shields.io/github/license/Nazumeki/uuidx?style=for-the-badge&color=blue&label=license)](LICENSE)
+
+[![Stars](https://img.shields.io/github/stars/Nazumeki/uuidx?style=for-the-badge&logo=github&logoColor=white&label=stars)](https://github.com/Nazumeki/uuidx/stargazers)
+[![Forks](https://img.shields.io/github/forks/Nazumeki/uuidx?style=for-the-badge&logo=github&logoColor=white&label=forks)](https://github.com/Nazumeki/uuidx/forks)
+[![Commits](https://img.shields.io/github/commit-activity/t/Nazumeki/uuidx?style=for-the-badge&logo=github&logoColor=white&label=commits)](https://github.com/Nazumeki/uuidx/commits)
+[![Issues](https://img.shields.io/github/issues/Nazumeki/uuidx?style=for-the-badge&logo=github&logoColor=white&label=issues)](https://github.com/Nazumeki/uuidx/issues)
+[![PRs](https://img.shields.io/github/issues-pr/Nazumeki/uuidx?style=for-the-badge&logo=github&logoColor=white&label=PRs)](https://github.com/Nazumeki/uuidx/pulls)
 
 `uuidx` is a Rust workspace for generating, inspecting, validating, and
 formatting UUIDs. One domain crate powers the `uuidx` CLI, Rust applications,
@@ -34,19 +36,17 @@ JavaScript through WebAssembly, and native applications through a stable C ABI.
 
 ## Install
 
-For a direct manual installation, use [`docs/INSTALLATION.md`](docs/INSTALLATION.md)
-to download a release archive, verify it, and configure `PATH`. The same guide
-covers installing from crates.io with Cargo and setting Cargo's binary path when
-needed. For a checkout-based build, custom features or targets, or library
-artifacts, see
-[`docs/SOURCEBUILD.md`](docs/SOURCEBUILD.md).
-
 Install the published CLI from crates.io:
 
 ```console
 cargo install uuidx-cli --locked
 uuidx --version
 ```
+
+For a manual release-archive install, verification, and `PATH` setup, see
+[`docs/INSTALLATION.md`](docs/INSTALLATION.md). For a checkout-based build,
+custom features or targets, or library artifacts, see
+[`docs/SOURCEBUILD.md`](docs/SOURCEBUILD.md).
 
 ## Quick start
 
