@@ -271,7 +271,7 @@ fn v6_preserves_timestamp_and_node_metadata() {
             assert_eq!(node_kind, Some(NodeKind::Unicast));
             assert_eq!(timestamp.unix_seconds, 1_700_000_000);
         }
-        metadata => panic!("expected time metadata, got {metadata:?}"),
+        _ => panic!("expected time metadata"),
     }
 }
 
@@ -284,7 +284,7 @@ fn v6_default_node_is_locally_generated() {
             node_kind: Some(NodeKind::Multicast),
             ..
         } => assert_ne!(node_id, [0; 6]),
-        metadata => panic!("expected a locally generated node, got {metadata:?}"),
+        _ => panic!("expected a locally generated node"),
     }
 }
 
@@ -299,7 +299,7 @@ fn v7_uses_unix_millisecond_timestamp() {
     assert_eq!(inspection.version, InspectableUuidVersion::V7);
     match inspection.metadata {
         UuidMetadata::Time { timestamp, .. } => assert_eq!(timestamp.unix_millis, millis),
-        metadata => panic!("expected time metadata, got {metadata:?}"),
+        _ => panic!("expected time metadata"),
     }
 }
 
@@ -591,7 +591,7 @@ fn legacy_versions_are_inspectable_without_generation_support() {
                     algorithm: NameHashAlgorithm::Md5,
                 },
             ) => {}
-            (_, metadata) => panic!("unexpected metadata: {metadata:?}"),
+            _ => panic!("unexpected metadata"),
         }
     }
 }
