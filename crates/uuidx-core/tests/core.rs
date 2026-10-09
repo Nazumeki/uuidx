@@ -771,3 +771,134 @@ fn identifier_inspection_detects_each_supported_family() {
         Err(uuidx_core::IdentifierParseError)
     );
 }
+
+#[test]
+fn identifier_family_parses_aliases_and_displays_names() {
+    use uuidx_core::IdentifierFamily;
+
+    assert_eq!(
+        IdentifierFamily::from_str("UUID").unwrap(),
+        IdentifierFamily::Uuid
+    );
+    assert_eq!(
+        IdentifierFamily::from_str("nano-id").unwrap(),
+        IdentifierFamily::Nanoid
+    );
+    assert_eq!(
+        IdentifierFamily::from_str("snowflake").unwrap(),
+        IdentifierFamily::Snowflake
+    );
+    assert_eq!(IdentifierFamily::Uuid.to_string(), "uuid");
+    assert_eq!(IdentifierFamily::Nanoid.to_string(), "nanoid");
+    assert!(IdentifierFamily::from_str("objectid").is_err());
+
+    #[cfg(feature = "ulid-inspect")]
+    {
+        assert_eq!(
+            IdentifierFamily::from_str("ulid").unwrap(),
+            IdentifierFamily::Ulid
+        );
+        assert_eq!(IdentifierFamily::Ulid.to_string(), "ulid");
+    }
+}
+
+#[test]
+fn inspect_identifier_as_forces_the_requested_family() {
+    use uuidx_core::{IdentifierFamily, IdentifierInspection, IdentifierTypeError};
+
+    let uuid = "018f2c0b-6c5b-7d2e-8f4a-123456789abc";
+    let nanoid = "V1StGXR8_Z5jdHi6B-myT";
+
+    assert!(matches!(
+        uuidx_core::inspect_identifier_as(uuid, IdentifierFamily::Uuid),
+        Ok(IdentifierInspection::Uuid(_))
+    ));
+    assert!(matches!(
+        uuidx_core::inspect_identifier_as(nanoid, IdentifierFamily::Nanoid),
+        Ok(IdentifierInspection::Nanoid(_))
+    ));
+    assert!(matches!(
+        uuidx_core::inspect_identifier_as("1724552287438348288", IdentifierFamily::Snowflake),
+        Ok(IdentifierInspection::Snowflake(_))
+    ));
+    assert!(matches!(
+        uuidx_core::inspect_identifier_as(nanoid, IdentifierFamily::Uuid),
+        Err(IdentifierTypeError::Uuid(_))
+    ));
+    assert!(matches!(
+        uuidx_core::inspect_identifier_as(uuid, IdentifierFamily::Nanoid),
+        Err(IdentifierTypeError::Nanoid(_))
+    ));
+
+    #[cfg(feature = "ulid-inspect")]
+    assert!(matches!(
+        uuidx_core::inspect_identifier_as("01ARZ3NDEKTSV4RRFFQ69G5FAV", IdentifierFamily::Ulid),
+        Ok(IdentifierInspection::Ulid(_))
+    ));
+}
+
+#[test]
+fn inspection_normalized_reflects_each_family() {
+    use uuidx_core::{IdentifierFamily, inspect_identifier_as};
+
+    assert_eq!(
+        inspect_identifier_as(
+            " 018F2C0B-6C5B-7D2E-8F4A-123456789ABC ",
+            IdentifierFamily::Uuid
+        )
+        .unwrap()
+        .normalized(),
+        "018f2c0b-6c5b-7d2e-8f4a-123456789abc"
+    );
+    assert_eq!(
+        inspect_identifier_as("  V1StGXR8_Z5jdHi6B-myT ", IdentifierFamily::Nanoid)
+            .unwrap()
+            .normalized(),
+        "V1StGXR8_Z5jdHi6B-myT"
+    );
+}
+
+#[test]
+fn inspection_kind_and_type_errors_cover_every_family() {
+    use uuidx_core::{IdentifierFamily, IdentifierTypeError, inspect_identifier_as};
+
+    assert_eq!(
+        inspect_identifier_as(
+            "018f2c0b-6c5b-7d2e-8f4a-123456789abc",
+            IdentifierFamily::Uuid
+        )
+        .unwrap()
+        .kind(),
+        "uuid"
+    );
+    assert_eq!(
+        inspect_identifier_as("V1StGXR8_Z5jdHi6B-myT", IdentifierFamily::Nanoid)
+            .unwrap()
+            .kind(),
+        "nanoid"
+    );
+    assert_eq!(
+        inspect_identifier_as("1724552287438348288", IdentifierFamily::Snowflake)
+            .unwrap()
+            .kind(),
+        "snowflake"
+    );
+    assert!(matches!(
+        inspect_identifier_as("not-a-snowflake", IdentifierFamily::Snowflake),
+        Err(IdentifierTypeError::Snowflake(_))
+    ));
+
+    #[cfg(feature = "ulid-inspect")]
+    {
+        assert_eq!(
+            inspect_identifier_as("01ARZ3NDEKTSV4RRFFQ69G5FAV", IdentifierFamily::Ulid)
+                .unwrap()
+                .kind(),
+            "ulid"
+        );
+        assert!(matches!(
+            inspect_identifier_as("not-a-ulid", IdentifierFamily::Ulid),
+            Err(IdentifierTypeError::Ulid(_))
+        ));
+    }
+}

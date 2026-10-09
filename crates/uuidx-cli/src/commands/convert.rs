@@ -15,10 +15,11 @@ where
     WErr: OutputWriter,
 {
     let format: UuidOutputFormat = args.to.into();
+    let case = args.case.into();
     let summary = input::for_each_record(&args.input, args.input.fail_fast, |index, value| {
         match uuidx_core::parse_uuid(value) {
             Ok(uuid) => {
-                let converted = uuidx_core::format_uuid(&uuid, format);
+                let converted = uuidx_core::format_uuid_with_case(&uuid, format, case);
                 output.converted(index, value, &uuid, &converted, format)?;
                 Ok(false)
             }
@@ -34,7 +35,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cli::{GlobalOptions, InputArgs, OutputModeArg, UuidFormatArg};
+    use crate::cli::{GlobalOptions, InputArgs, OutputModeArg, TextCaseArg, UuidFormatArg};
 
     fn args(values: &[&str]) -> ConvertArgs {
         ConvertArgs {
@@ -44,6 +45,7 @@ mod tests {
                 fail_fast: false,
             },
             to: UuidFormatArg::Urn,
+            case: TextCaseArg::Lower,
         }
     }
 

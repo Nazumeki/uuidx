@@ -10,7 +10,7 @@ use anstream::{
     stream::{AsLockedWrite, RawStream},
 };
 use serde::Serialize;
-use uuidx_core::{Uuid, UuidInspection, UuidOutputFormat};
+use uuidx_core::{IdentifierInspection, Uuid, UuidInspection, UuidOutputFormat, UuidTextCase};
 
 use crate::{
     cli::{GlobalOptions, OutputModeArg},
@@ -60,9 +60,10 @@ where
         uuid: &Uuid,
         version: &str,
         format: UuidOutputFormat,
+        case: UuidTextCase,
         warnings: &[String],
     ) -> Result<(), CliError> {
-        let value = uuidx_core::format_uuid(uuid, format);
+        let value = uuidx_core::format_uuid_with_case(uuid, format, case);
         match self.mode {
             RenderMode::Plain => self.write_stdout(&plain::value(&value)),
             RenderMode::Pretty => {
@@ -183,11 +184,18 @@ where
         }
     }
 
-    pub fn validated(&mut self, index: u64, input: &str, uuid: &Uuid) -> Result<(), CliError> {
+    pub fn validated(
+        &mut self,
+        index: u64,
+        input: &str,
+        inspection: &IdentifierInspection,
+    ) -> Result<(), CliError> {
         match self.mode {
             RenderMode::Plain => Ok(()),
-            RenderMode::Pretty => self.write_stdout(&pretty::validated(index, input, uuid)),
-            RenderMode::Json => self.write_json(&json::JsonRecord::validated(index, input, uuid)),
+            RenderMode::Pretty => self.write_stdout(&pretty::validated(index, input, inspection)),
+            RenderMode::Json => {
+                self.write_json(&json::JsonRecord::validated(index, input, inspection))
+            }
         }
     }
 
@@ -359,7 +367,14 @@ mod tests {
         ] {
             let mut output = output(mode);
             output
-                .generated(0, &uuid, "v7", UuidOutputFormat::Canonical, &warnings)
+                .generated(
+                    0,
+                    &uuid,
+                    "v7",
+                    UuidOutputFormat::Canonical,
+                    UuidTextCase::Lower,
+                    &warnings,
+                )
                 .unwrap();
             output
                 .inspected_uuid(0, uuid.to_string().as_str(), &inspection, false, true)
@@ -373,7 +388,13 @@ mod tests {
                     UuidOutputFormat::Simple,
                 )
                 .unwrap();
-            output.validated(0, &uuid.to_string(), &uuid).unwrap();
+            output
+                .validated(
+                    0,
+                    &uuid.to_string(),
+                    &IdentifierInspection::Uuid(inspection.clone()),
+                )
+                .unwrap();
             output
                 .record_error("test", 0, "bad", "invalid", "invalid value")
                 .unwrap();
@@ -392,7 +413,14 @@ mod tests {
             TestWriter::working(),
         );
         assert!(matches!(
-            plain.generated(0, &uuid, "v7", UuidOutputFormat::Canonical, &[]),
+            plain.generated(
+                0,
+                &uuid,
+                "v7",
+                UuidOutputFormat::Canonical,
+                UuidTextCase::Lower,
+                &[],
+            ),
             Err(CliError::Output(_))
         ));
 
@@ -412,7 +440,14 @@ mod tests {
             TestWriter::working(),
         );
         assert!(matches!(
-            json.generated(0, &uuid, "v7", UuidOutputFormat::Canonical, &[]),
+            json.generated(
+                0,
+                &uuid,
+                "v7",
+                UuidOutputFormat::Canonical,
+                UuidTextCase::Lower,
+                &[],
+            ),
             Err(CliError::Json(_))
         ));
 

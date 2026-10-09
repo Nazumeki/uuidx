@@ -122,6 +122,10 @@ Global output modes are `auto`, `pretty`, `plain`, and `json`. Use
 `uuidx <command> --help` for the parser-generated option reference. The JSONL
 contract for automation is documented in [`docs/JSON.md`](docs/JSON.md).
 
+`inspect` and `validate` accept `--type uuid|ulid|nanoid|snowflake` to force one
+identifier family instead of automatic detection. `generate` and `convert`
+accept `--case lower|upper` to control the case of emitted UUID digits.
+
 ## Integrations
 
 ### Rust

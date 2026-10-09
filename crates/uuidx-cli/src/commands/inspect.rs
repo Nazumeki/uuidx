@@ -16,8 +16,15 @@ where
     let fail_fast = args.input.fail_fast;
     let redact_sensitive = args.redact_sensitive;
     let show_layout = args.layout;
+    let family = args.kind.map(Into::into);
     let summary = input::for_each_record(&args.input, fail_fast, |index, value| {
-        match uuidx_core::inspect_identifier(value) {
+        let inspection = match family {
+            Some(family) => {
+                uuidx_core::inspect_identifier_as(value, family).map_err(|error| error.to_string())
+            }
+            None => uuidx_core::inspect_identifier(value).map_err(|error| error.to_string()),
+        };
+        match inspection {
             Ok(uuidx_core::IdentifierInspection::Uuid(uuid)) => {
                 output.inspected_uuid(index, value, &uuid, redact_sensitive, show_layout)?;
                 Ok(false)
@@ -35,14 +42,8 @@ where
                 output.inspected_snowflake(index, value, &snowflake, show_layout)?;
                 Ok(false)
             }
-            Err(error) => {
-                output.record_error(
-                    "inspect",
-                    index,
-                    value,
-                    "invalid_identifier",
-                    &error.to_string(),
-                )?;
+            Err(message) => {
+                output.record_error("inspect", index, value, "invalid_identifier", &message)?;
                 Ok(true)
             }
         }
@@ -95,6 +96,7 @@ mod tests {
                 input: None,
                 fail_fast: false,
             },
+            kind: None,
             layout: false,
             redact_sensitive: false,
         };
@@ -116,6 +118,7 @@ mod tests {
                 input: None,
                 fail_fast: false,
             },
+            kind: None,
             layout: false,
             redact_sensitive: false,
         };
@@ -132,6 +135,7 @@ mod tests {
                 input: None,
                 fail_fast: false,
             },
+            kind: None,
             layout: false,
             redact_sensitive: false,
         };
@@ -153,6 +157,7 @@ mod tests {
                     input: None,
                     fail_fast: false,
                 },
+                kind: None,
                 layout: false,
                 redact_sensitive: false,
             };

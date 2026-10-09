@@ -1,5 +1,8 @@
 use serde::Serialize;
-use uuidx_core::{BitField, Uuid, UuidInspection, UuidMetadata, UuidOutputFormat, inspect_uuid};
+use uuidx_core::{
+    BitField, IdentifierInspection, Uuid, UuidInspection, UuidMetadata, UuidOutputFormat,
+    inspect_uuid,
+};
 
 #[derive(Debug, Serialize)]
 pub struct JsonRecord {
@@ -154,24 +157,35 @@ impl JsonRecord {
         }
     }
 
-    pub fn validated(index: u64, input: &str, uuid: &Uuid) -> Self {
-        let inspection = inspect_uuid(uuid);
-        Self {
+    pub fn validated(index: u64, input: &str, inspection: &IdentifierInspection) -> Self {
+        let mut record = Self {
             schema_version: 1,
             operation: "validate".to_owned(),
             index,
             ok: true,
             input: Some(input.to_owned()),
-            value: Some(inspection.normalized),
-            bytes: Some(hex::encode(uuid.as_bytes())),
-            kind: Some("uuid".to_owned()),
-            version: Some(inspection.version.to_string()),
+            value: Some(inspection.normalized().to_owned()),
+            bytes: None,
+            kind: Some(inspection.kind().to_owned()),
+            version: None,
             format: None,
             metadata: None,
             fields: None,
             error: None,
             warnings: Vec::new(),
+        };
+        match inspection {
+            IdentifierInspection::Uuid(uuid) => {
+                record.bytes = Some(hex::encode(uuid.bytes));
+                record.version = Some(uuid.version.to_string());
+            }
+            #[cfg(feature = "ulid-inspect")]
+            IdentifierInspection::Ulid(ulid) => {
+                record.bytes = Some(hex::encode(ulid.bytes));
+            }
+            IdentifierInspection::Nanoid(_) | IdentifierInspection::Snowflake(_) => {}
         }
+        record
     }
 
     pub fn error(operation: &str, index: u64, input: &str, code: &str, message: &str) -> Self {
@@ -438,9 +452,13 @@ mod tests {
         let converted = JsonRecord::converted(4, "input", &v4, "output", UuidOutputFormat::Simple);
         assert!(serde_json::to_value(converted).unwrap()["warnings"].is_null());
 
-        let validated = JsonRecord::validated(5, "input", &uuid);
+        let validated =
+            JsonRecord::validated(5, "input", &IdentifierInspection::Uuid(inspect_uuid(&uuid)));
         let validated_json = serde_json::to_value(validated).unwrap();
         assert_eq!(validated_json["operation"], "validate");
+        assert_eq!(validated_json["kind"], "uuid");
+        assert_eq!(validated_json["version"], "v7");
+        assert_eq!(validated_json["bytes"], "018f2c0b6c5b7d2e8f4a123456789abc");
         assert_eq!(validated_json["format"], serde_json::Value::Null);
 
         let error = JsonRecord::error("inspect", 6, "bad", "invalid_identifier", "invalid");

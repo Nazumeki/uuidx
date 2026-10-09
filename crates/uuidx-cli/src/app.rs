@@ -42,7 +42,7 @@ mod tests {
     use super::*;
     use crate::cli::{
         Command, ConvertArgs, GenerateArgs, GlobalOptions, InputArgs, InspectArgs, OutputModeArg,
-        UuidFormatArg, ValidateArgs,
+        TextCaseArg, UuidFormatArg, ValidateArgs,
     };
     use crate::errors::CliError;
 
@@ -83,12 +83,14 @@ mod tests {
                 timestamp: None,
                 custom: None,
                 format: UuidFormatArg::Canonical,
+                case: TextCaseArg::Lower,
             }))),
             AppResult::Success
         ));
         assert!(matches!(
             run_silent(cli(Command::Inspect(InspectArgs {
                 input: input(&[UUID]),
+                kind: None,
                 layout: false,
                 redact_sensitive: false,
             }))),
@@ -98,18 +100,21 @@ mod tests {
             run_silent(cli(Command::Convert(ConvertArgs {
                 input: input(&[UUID]),
                 to: UuidFormatArg::Simple,
+                case: TextCaseArg::Lower,
             }))),
             AppResult::Success
         ));
         assert!(matches!(
             run_silent(cli(Command::Validate(ValidateArgs {
                 input: input(&[UUID]),
+                kind: None,
             }))),
             AppResult::Success
         ));
         assert!(matches!(
             run_silent(cli(Command::Validate(ValidateArgs {
                 input: input(&["not-a-uuid"]),
+                kind: None,
             }))),
             AppResult::DataErrors
         ));
@@ -123,6 +128,7 @@ mod tests {
                 timestamp: None,
                 custom: None,
                 format: UuidFormatArg::Canonical,
+                case: TextCaseArg::Lower,
             }))),
             AppResult::Failure(_)
         ));
@@ -132,6 +138,7 @@ mod tests {
     fn public_run_uses_the_real_output_boundary() {
         let mut cli = cli(Command::Validate(ValidateArgs {
             input: input(&[UUID]),
+            kind: None,
         }));
         cli.global.output = OutputModeArg::Plain;
         assert!(matches!(run(cli), AppResult::Success));
@@ -147,6 +154,7 @@ mod tests {
         let result = run_with_output(
             cli(Command::Validate(ValidateArgs {
                 input: input(&[UUID]),
+                kind: None,
             })),
             output,
         );

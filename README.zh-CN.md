@@ -116,6 +116,10 @@ uuidx [OPTIONS] <COMMAND>
 `uuidx <command> --help` 查看由解析器生成的选项参考。面向自动化的 JSONL
 契约记录在 [`docs/JSON.md`](docs/JSON.md)。
 
+`inspect` 与 `validate` 支持 `--type uuid|ulid|nanoid|snowflake`，用于强制指定
+标识符族而非自动检测。`generate` 与 `convert` 支持 `--case lower|upper`，用于
+控制输出 UUID 十六进制数字的大小写。
+
 ## 集成
 
 ### Rust

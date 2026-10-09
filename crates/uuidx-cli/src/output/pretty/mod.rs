@@ -1,7 +1,7 @@
 mod sections;
 mod theme;
 
-use uuidx_core::{Uuid, UuidInspection, UuidOutputFormat};
+use uuidx_core::{IdentifierInspection, UuidInspection, UuidOutputFormat};
 
 use self::theme::{error, heading, label, success, version_tag, warning};
 
@@ -152,14 +152,14 @@ pub fn converted(index: u64, input: &str, value: &str, format: UuidOutputFormat)
     )
 }
 
-pub fn validated(index: u64, input: &str, uuid: &Uuid) -> String {
+pub fn validated(index: u64, input: &str, inspection: &IdentifierInspection) -> String {
     format!(
         "{} {} {}\n{} {}",
         success("[ok]"),
         label(&format!("#{index}")),
         input,
         label("normalized"),
-        uuid.hyphenated(),
+        inspection.normalized(),
     )
 }
 
@@ -235,8 +235,10 @@ mod tests {
         assert!(inspection(0, &uuid.to_string(), &inspected, false, true).contains("Bit layout"));
         assert!(!inspection(0, &uuid.to_string(), &inspected, false, false).contains("Bit layout"));
         assert!(converted(1, "input", "output", UuidOutputFormat::Urn).contains("Converted UUID"));
-        assert!(validated(2, "input", &uuid).contains("[ok]"));
-        assert!(data_error(3, "bad", "invalid").contains("[error]"));
+        assert!(validated(2, "input", &IdentifierInspection::Uuid(inspected)).contains("[ok]"));
+        let nanoid = uuidx_core::inspect_nanoid("V1StGXR8_Z5jdHi6B-myT").unwrap();
+        assert!(validated(3, "input", &IdentifierInspection::Nanoid(nanoid)).contains("[ok]"));
+        assert!(data_error(4, "bad", "invalid").contains("[error]"));
         assert!(top_level_error("failure").contains("error:"));
     }
 

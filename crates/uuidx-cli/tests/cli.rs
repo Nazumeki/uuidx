@@ -766,3 +766,166 @@ fn inspect_rejects_removed_kind_option() {
             .contains("unexpected argument '--kind'")
     );
 }
+
+#[test]
+fn inspect_type_forces_the_requested_family() {
+    let ok = run(&[
+        "inspect",
+        "V1StGXR8_Z5jdHi6B-myT",
+        "--type",
+        "nanoid",
+        "--output",
+        "json",
+    ]);
+    assert!(ok.status.success());
+    let record: Value = serde_json::from_slice(&ok.stdout).expect("JSON should parse");
+    assert_eq!(record["kind"], "nanoid");
+
+    let mismatch = run(&[
+        "inspect",
+        "V1StGXR8_Z5jdHi6B-myT",
+        "--type",
+        "uuid",
+        "--output",
+        "json",
+    ]);
+    assert_eq!(mismatch.status.code(), Some(1));
+    let record: Value = serde_json::from_slice(&mismatch.stdout).expect("JSON should parse");
+    assert_eq!(record["ok"], false);
+    assert_eq!(record["error"]["code"], "invalid_identifier");
+}
+
+#[test]
+fn inspect_type_rejects_an_unsupported_family() {
+    let output = run(&["inspect", "x", "--type", "objectid"]);
+    assert_eq!(output.status.code(), Some(2));
+}
+
+#[cfg(feature = "ulid-inspect")]
+#[test]
+fn inspect_type_accepts_ulid() {
+    let ok = run(&[
+        "inspect",
+        "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+        "--type",
+        "ulid",
+        "--output",
+        "json",
+    ]);
+    assert!(ok.status.success());
+    let record: Value = serde_json::from_slice(&ok.stdout).expect("JSON should parse");
+    assert_eq!(record["kind"], "ulid");
+}
+
+#[test]
+fn validate_type_validates_other_families_and_tags_kind() {
+    let ok = run(&[
+        "validate",
+        "V1StGXR8_Z5jdHi6B-myT",
+        "--type",
+        "nanoid",
+        "--output",
+        "json",
+    ]);
+    assert!(ok.status.success());
+    let record: Value = serde_json::from_slice(&ok.stdout).expect("JSON should parse");
+    assert_eq!(record["operation"], "validate");
+    assert_eq!(record["kind"], "nanoid");
+    assert!(record["bytes"].is_null());
+
+    let uuid_ok = run(&[
+        "validate",
+        "018f2c0b-6c5b-7d2e-8f4a-123456789abc",
+        "--type",
+        "uuid",
+        "--output",
+        "json",
+    ]);
+    assert!(uuid_ok.status.success());
+    let record: Value = serde_json::from_slice(&uuid_ok.stdout).expect("JSON should parse");
+    assert_eq!(record["kind"], "uuid");
+    assert_eq!(record["version"], "v7");
+    assert_eq!(record["bytes"].as_str().map(str::len), Some(32));
+
+    let mismatch = run(&[
+        "validate",
+        "018f2c0b-6c5b-7d2e-8f4a-123456789abc",
+        "--type",
+        "nanoid",
+        "--output",
+        "json",
+    ]);
+    assert_eq!(mismatch.status.code(), Some(1));
+    let record: Value = serde_json::from_slice(&mismatch.stdout).expect("JSON should parse");
+    assert_eq!(record["error"]["code"], "invalid_identifier");
+
+    let default_uuid = run(&["validate", "not-a-uuid", "--output", "json"]);
+    assert_eq!(default_uuid.status.code(), Some(1));
+    let record: Value = serde_json::from_slice(&default_uuid.stdout).expect("JSON should parse");
+    assert_eq!(record["error"]["code"], "invalid_uuid");
+}
+
+#[test]
+fn convert_applies_requested_case_to_uuid_digits() {
+    let uuid = "018f2c0b-6c5b-7d2e-8f4a-123456789abc";
+
+    let lower = run(&[
+        "convert", uuid, "--to", "urn", "--case", "lower", "--output", "plain",
+    ]);
+    assert!(lower.status.success());
+    assert_eq!(
+        String::from_utf8(lower.stdout).unwrap().trim(),
+        format!("urn:uuid:{uuid}")
+    );
+
+    let cases = [
+        ("canonical", "018F2C0B-6C5B-7D2E-8F4A-123456789ABC"),
+        ("simple", "018F2C0B6C5B7D2E8F4A123456789ABC"),
+        ("urn", "urn:uuid:018F2C0B-6C5B-7D2E-8F4A-123456789ABC"),
+        ("braced", "{018F2C0B-6C5B-7D2E-8F4A-123456789ABC}"),
+    ];
+    for (format, expected) in cases {
+        let output = run(&[
+            "convert", uuid, "--to", format, "--case", "upper", "--output", "plain",
+        ]);
+        assert!(output.status.success(), "convert {format} failed");
+        assert_eq!(String::from_utf8(output.stdout).unwrap().trim(), expected);
+    }
+}
+
+#[test]
+fn generate_case_changes_value_but_not_bytes() {
+    let upper = run(&[
+        "generate", "v4", "--format", "simple", "--case", "upper", "--output", "json",
+    ]);
+    assert!(upper.status.success());
+    let record: Value = serde_json::from_slice(&upper.stdout).expect("JSON should parse");
+    let value = record["value"].as_str().expect("value should be a string");
+    let bytes = record["bytes"].as_str().expect("bytes should be a string");
+    assert_eq!(value, bytes.to_ascii_uppercase());
+    assert_eq!(bytes, bytes.to_ascii_lowercase());
+
+    let lower = run(&[
+        "generate", "v4", "--format", "simple", "--case", "lower", "--output", "json",
+    ]);
+    assert!(lower.status.success());
+    let record: Value = serde_json::from_slice(&lower.stdout).expect("JSON should parse");
+    assert_eq!(record["value"], record["bytes"]);
+}
+
+#[test]
+fn scoped_help_lists_type_and_case_options() {
+    for command in ["inspect", "validate"] {
+        let output = run(&[command, "--help"]);
+        assert!(output.status.success());
+        let help = String::from_utf8(output.stdout).expect("help should be UTF-8");
+        assert!(help.contains("--type"), "{command} help should list --type");
+    }
+
+    for command in ["generate", "convert"] {
+        let output = run(&[command, "--help"]);
+        assert!(output.status.success());
+        let help = String::from_utf8(output.stdout).expect("help should be UTF-8");
+        assert!(help.contains("--case"), "{command} help should list --case");
+    }
+}

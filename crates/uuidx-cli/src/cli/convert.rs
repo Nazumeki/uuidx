@@ -1,6 +1,6 @@
 use clap::Args;
 
-use super::{InputArgs, UuidFormatArg};
+use super::{InputArgs, TextCaseArg, UuidFormatArg};
 
 #[cfg(windows)]
 const CONVERT_USAGE: &str = "uuidx.exe convert [OPTIONS] [VALUE]...";
@@ -26,4 +26,14 @@ pub struct ConvertArgs {
         help_heading = "Conversion options"
     )]
     pub to: UuidFormatArg,
+
+    /// Letter case for emitted UUID hexadecimal digits.
+    #[arg(
+        long = "case",
+        value_name = "CASE",
+        value_enum,
+        default_value_t = TextCaseArg::Lower,
+        help_heading = "Conversion options"
+    )]
+    pub case: TextCaseArg,
 }

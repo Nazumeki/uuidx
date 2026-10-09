@@ -1,6 +1,6 @@
 use clap::Args;
 
-use super::UuidFormatArg;
+use super::{TextCaseArg, UuidFormatArg};
 
 #[derive(Debug, Args)]
 #[command(next_help_heading = "Generate options")]
@@ -42,6 +42,16 @@ pub struct GenerateArgs {
         default_value_t = UuidFormatArg::Canonical
     )]
     pub format: UuidFormatArg,
+
+    /// Letter case for emitted UUID hexadecimal digits.
+    #[arg(
+        long = "case",
+        value_name = "CASE",
+        value_enum,
+        default_value_t = TextCaseArg::Lower,
+        help_heading = "Generate options"
+    )]
+    pub case: TextCaseArg,
 }
 
 fn positive_count(value: &str) -> Result<u64, String> {

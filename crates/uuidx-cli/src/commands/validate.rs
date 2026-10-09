@@ -13,20 +13,23 @@ where
     WOut: OutputWriter,
     WErr: OutputWriter,
 {
+    let family = args
+        .kind
+        .map(Into::into)
+        .unwrap_or(uuidx_core::IdentifierFamily::Uuid);
     let summary = input::for_each_record(&args.input, args.input.fail_fast, |index, value| {
-        match uuidx_core::parse_uuid(value) {
-            Ok(uuid) => {
-                output.validated(index, value, &uuid)?;
+        match uuidx_core::inspect_identifier_as(value, family) {
+            Ok(inspection) => {
+                output.validated(index, value, &inspection)?;
                 Ok(false)
             }
             Err(error) => {
-                output.record_error(
-                    "validate",
-                    index,
-                    value,
-                    "invalid_uuid",
-                    &error.to_string(),
-                )?;
+                let code = if family == uuidx_core::IdentifierFamily::Uuid {
+                    "invalid_uuid"
+                } else {
+                    "invalid_identifier"
+                };
+                output.record_error("validate", index, value, code, &error.to_string())?;
                 Ok(true)
             }
         }
@@ -46,6 +49,7 @@ mod tests {
                 input: None,
                 fail_fast: false,
             },
+            kind: None,
         }
     }
 

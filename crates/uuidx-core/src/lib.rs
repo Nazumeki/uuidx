@@ -12,9 +12,14 @@ mod parse;
 mod types;
 
 pub use error::{GenerateError, HexError, ParseUuidError};
-pub use format::{UuidOutputFormat, format_uuid, parse_hex_array};
+pub use format::{
+    UuidOutputFormat, UuidTextCase, format_uuid, format_uuid_with_case, parse_hex_array,
+};
 pub use generate::generate_uuid;
-pub use inspect::identifier::{IdentifierInspection, IdentifierParseError, inspect_identifier};
+pub use inspect::identifier::{
+    IdentifierFamily, IdentifierInspection, IdentifierParseError, IdentifierTypeError,
+    inspect_identifier, inspect_identifier_as,
+};
 pub use inspect::nanoid::{
     NANOID_STANDARD_ALPHABET, NANOID_STANDARD_ENTROPY_BITS, NANOID_STANDARD_LENGTH,
     NanoidInspection, NanoidParseError, inspect_nanoid,

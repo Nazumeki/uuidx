@@ -49,7 +49,7 @@ Successful records use these operation-specific fields:
 | `inspect` ULID      | `input`, `value`, `bytes`, `kind`, and `metadata`; `version` and `fields` are omitted       |
 | `inspect` NanoID    | `input`, `value`, `kind`, and `metadata`                                                    |
 | `inspect` Snowflake | `input`, `value`, `kind`, and `metadata`                                                    |
-| `validate`          | `input`, `value`, `bytes`, `kind`, and `version`                                            |
+| `validate`          | `input`, `value`, and `kind`; UUID records also carry `bytes` and `version`                  |
 | `convert`           | `input`, `value`, `bytes`, `kind`, `version`, `format`, and optional `warnings`             |
 
 JSON inspection always includes all available metadata and UUID `fields`,
@@ -60,6 +60,25 @@ For UUID records, `value` is canonical text for inspection and validation,
 and uses the requested format for generation and conversion. ULID inspection
 returns normalized uppercase text. NanoID text is case-sensitive and retained.
 Snowflake text is canonical unsigned decimal without leading zeroes.
+
+## Identifier type selection
+
+`inspect` and `validate` accept `--type <TYPE>` (`-t`) to force one identifier
+family instead of automatic detection. Supported values are `uuid`, `ulid`,
+`nanoid`, and `snowflake`; `ulid` is available only when the `ulid-inspect`
+feature is enabled. `validate` defaults to `uuid` when `--type` is omitted.
+
+For non-UUID `validate` records the `kind` field names the validated family and
+`bytes` and `version` are omitted. An invalid record uses the `invalid_uuid`
+error code for the default or explicit `uuid` family and `invalid_identifier`
+for every other family.
+
+## Text case
+
+`generate` and `convert` accept `--case <CASE>` with `lower` (the default) or
+`upper`. It changes only the hexadecimal digits of the emitted UUID `value`.
+The `urn:uuid:` scheme prefix, the braced delimiters, and the JSON `bytes` field
+stay lowercase, and other identifier families keep their canonical casing.
 
 ## Metadata
 
@@ -189,7 +208,9 @@ The current data-error codes are:
 | Operation               | Code                 |
 | ----------------------- | -------------------- |
 | `inspect`               | `invalid_identifier` |
-| `validate` or `convert` | `invalid_uuid`       |
+| `validate` (UUID family) | `invalid_uuid`      |
+| `validate` (other family) | `invalid_identifier` |
+| `convert`               | `invalid_uuid`       |
 
 `message` is a human-readable parser or inspection error and should not be
 used as the machine-readable discriminator.

@@ -24,13 +24,14 @@ where
 {
     let version = parse_generation_version(&args.target)?;
     let format: UuidOutputFormat = args.format.into();
+    let case = args.case.into();
     let options = build_options(args, version)?;
     let warnings = warnings_for(version);
 
     for index in 0..args.count {
         let uuid = uuidx_core::generate_uuid(&options)
             .map_err(|error| CliError::Usage(error.to_string()))?;
-        output.generated(index, &uuid, &version.to_string(), format, &warnings)?;
+        output.generated(index, &uuid, &version.to_string(), format, case, &warnings)?;
     }
     Ok(false)
 }
@@ -129,6 +130,7 @@ mod tests {
             timestamp: None,
             custom: None,
             format: crate::cli::UuidFormatArg::Canonical,
+            case: crate::cli::TextCaseArg::Lower,
         }
     }
 
