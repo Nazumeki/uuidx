@@ -67,32 +67,18 @@ pub fn format_uuid(uuid: &Uuid, format: UuidOutputFormat) -> String {
 }
 
 pub fn format_uuid_with_case(uuid: &Uuid, format: UuidOutputFormat, case: UuidTextCase) -> String {
-    let upper = case == UuidTextCase::Upper;
-    match format {
-        UuidOutputFormat::Canonical => apply_case(uuid.hyphenated(), upper),
-        UuidOutputFormat::Simple => apply_case(uuid.simple(), upper),
-        UuidOutputFormat::Urn => {
-            if upper {
-                format!("urn:uuid:{}", uuid.hyphenated().to_ascii_uppercase())
-            } else {
-                uuid.urn()
-            }
+    let inner = uuid.external();
+    match (format, case) {
+        (UuidOutputFormat::Canonical, UuidTextCase::Lower) => inner.hyphenated().to_string(),
+        (UuidOutputFormat::Canonical, UuidTextCase::Upper) => format!("{:X}", inner.hyphenated()),
+        (UuidOutputFormat::Simple, UuidTextCase::Lower) => inner.simple().to_string(),
+        (UuidOutputFormat::Simple, UuidTextCase::Upper) => format!("{:X}", inner.simple()),
+        (UuidOutputFormat::Urn, UuidTextCase::Lower) => inner.urn().to_string(),
+        (UuidOutputFormat::Urn, UuidTextCase::Upper) => {
+            format!("urn:uuid:{:X}", inner.hyphenated())
         }
-        UuidOutputFormat::Braced => {
-            if upper {
-                format!("{{{}}}", uuid.hyphenated().to_ascii_uppercase())
-            } else {
-                format!("{{{}}}", uuid.hyphenated())
-            }
-        }
-    }
-}
-
-fn apply_case(value: String, upper: bool) -> String {
-    if upper {
-        value.to_ascii_uppercase()
-    } else {
-        value
+        (UuidOutputFormat::Braced, UuidTextCase::Lower) => inner.braced().to_string(),
+        (UuidOutputFormat::Braced, UuidTextCase::Upper) => format!("{:X}", inner.braced()),
     }
 }
 

@@ -25,5 +25,12 @@ test = false
 doc = false
 bench = false
 
+[[bin]]
+name = "roundtrip_and_families"
+path = "fuzz_targets/roundtrip_and_families.rs"
+test = false
+doc = false
+bench = false
+
 [profile.release]
 debug = 1

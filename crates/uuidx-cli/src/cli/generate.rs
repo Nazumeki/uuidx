@@ -21,16 +21,20 @@ pub struct GenerateArgs {
     #[arg(short = 'N', long)]
     pub name: Option<String>,
 
-    /// [v6] Six-byte node ID as hexadecimal, or 'random' for the default.
-    #[arg(short = 'd', long)]
+    /// Six-byte node ID for UUID v6 as hexadecimal, or `random` for the default.
+    #[arg(
+        short = 'd',
+        long,
+        help = "[v6] Six-byte node ID as hexadecimal, or 'random' for the default."
+    )]
     pub node: Option<String>,
 
     /// [v6/v7] RFC3339 timestamp or Unix milliseconds.
     #[arg(short = 't', long)]
     pub timestamp: Option<String>,
 
-    /// [v8] Sixteen custom bytes as hexadecimal.
-    #[arg(short = 'C', long)]
+    /// Sixteen custom bytes for UUID v8 as hexadecimal.
+    #[arg(short = 'C', long, help = "[v8] Sixteen custom bytes as hexadecimal.")]
     pub custom: Option<String>,
 
     /// UUID output format.

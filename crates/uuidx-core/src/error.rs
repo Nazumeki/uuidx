@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use crate::{GeneratableUuidVersion, InspectableUuidVersion};
+use crate::GeneratableUuidVersion;
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum ParseUuidError {
@@ -22,9 +22,6 @@ pub enum HexError {
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum GenerateError {
-    #[error("UUID version {version} is not supported for generation")]
-    UnsupportedVersion { version: InspectableUuidVersion },
-
     #[error("UUID {version} generation requires --namespace and --name")]
     MissingNameArguments { version: GeneratableUuidVersion },
 

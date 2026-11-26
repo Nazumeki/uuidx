@@ -11,7 +11,7 @@ use uuidx_core::{
 use crate::{
     cli::GenerateArgs,
     errors::CliError,
-    output::{Output, OutputWriter},
+    output::{Output, OutputWriter, generation_warnings},
 };
 
 pub fn run<WOut, WErr>(
@@ -23,15 +23,16 @@ where
     WErr: OutputWriter,
 {
     let version = parse_generation_version(&args.target)?;
+    let version_name = version.to_string();
     let format: UuidOutputFormat = args.format.into();
     let case = args.case.into();
     let options = build_options(args, version)?;
-    let warnings = warnings_for(version);
+    let warnings = generation_warnings(version);
 
     for index in 0..args.count {
         let uuid = uuidx_core::generate_uuid(&options)
             .map_err(|error| CliError::Usage(error.to_string()))?;
-        output.generated(index, &uuid, &version.to_string(), format, case, &warnings)?;
+        output.generated(index, &uuid, &version_name, format, case, warnings)?;
     }
     Ok(false)
 }
@@ -65,13 +66,7 @@ fn build_options(
 }
 
 fn parse_namespace(value: &str) -> Result<Uuid, CliError> {
-    match value.to_ascii_lowercase().as_str() {
-        "dns" => Ok(Uuid::NAMESPACE_DNS),
-        "url" => Ok(Uuid::NAMESPACE_URL),
-        "oid" => Ok(Uuid::NAMESPACE_OID),
-        "x500" => Ok(Uuid::NAMESPACE_X500),
-        _ => uuidx_core::parse_uuid(value).map_err(|error| CliError::Usage(error.to_string())),
-    }
+    uuidx_core::parse_namespace(value).map_err(|error| CliError::Usage(error.to_string()))
 }
 
 fn parse_node(value: &str) -> Result<Option<[u8; 6]>, CliError> {
@@ -103,15 +98,6 @@ fn parse_timestamp(value: &str) -> Result<SystemTime, CliError> {
         .checked_add(Duration::from_secs(seconds as u64))
         .and_then(|time| time.checked_add(Duration::from_nanos(u64::from(parsed.nanosecond()))))
         .ok_or_else(|| CliError::Usage("timestamp is outside the supported range".to_owned()))
-}
-
-fn warnings_for(version: GeneratableUuidVersion) -> Vec<String> {
-    match version {
-        GeneratableUuidVersion::V3 => vec!["UUID v3 uses legacy MD5 name hashing".to_owned()],
-        GeneratableUuidVersion::V5 => vec!["UUID v5 uses legacy SHA-1 name hashing".to_owned()],
-        GeneratableUuidVersion::V8 => vec!["UUID v8 uniqueness is application-defined".to_owned()],
-        _ => Vec::new(),
-    }
 }
 
 #[cfg(test)]
@@ -240,11 +226,11 @@ mod tests {
 
     #[test]
     fn warnings_are_reserved_for_legacy_or_application_defined_versions() {
-        assert_eq!(warnings_for(GeneratableUuidVersion::V3).len(), 1);
-        assert!(warnings_for(GeneratableUuidVersion::V4).is_empty());
-        assert!(warnings_for(GeneratableUuidVersion::V7).is_empty());
-        assert_eq!(warnings_for(GeneratableUuidVersion::V5).len(), 1);
-        assert_eq!(warnings_for(GeneratableUuidVersion::V8).len(), 1);
+        assert_eq!(generation_warnings(GeneratableUuidVersion::V3).len(), 1);
+        assert!(generation_warnings(GeneratableUuidVersion::V4).is_empty());
+        assert!(generation_warnings(GeneratableUuidVersion::V7).is_empty());
+        assert_eq!(generation_warnings(GeneratableUuidVersion::V5).len(), 1);
+        assert_eq!(generation_warnings(GeneratableUuidVersion::V8).len(), 1);
     }
 
     #[test]

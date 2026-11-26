@@ -852,6 +852,13 @@ fn ffi_struct_layouts_are_stable_for_the_c_abi() {
     assert_eq!(size_of::<UuidxBitField>(), 24);
     assert_eq!(offset_of!(UuidxInspection, version), 0);
     assert!(offset_of!(UuidxInspection, fields) > offset_of!(UuidxInspection, custom));
+    assert_eq!(offset_of!(UuidxIdentifierInspection, kind), 0);
+    assert_eq!(offset_of!(UuidxIdentifierInspection, normalized), 12);
+    assert_eq!(offset_of!(UuidxIdentifierInspection, bytes), 52);
+    assert_eq!(offset_of!(UuidxIdentifierInspection, timestamp_ms), 72);
+    assert!(
+        offset_of!(UuidxIdentifierInspection, fields) > offset_of!(UuidxIdentifierInspection, uuid)
+    );
 
     let defaults = UuidxGenerationOptions::default();
     assert_eq!(defaults.version, 0);
@@ -877,10 +884,20 @@ fn checked_in_header_matches_the_exported_contract() {
         ("UUIDX_ERROR_GENERATION", "8"),
         ("UUIDX_ERROR_PANIC", "9"),
         ("UUIDX_ERROR_INTERNAL", "10"),
+        ("UUIDX_ERROR_INVALID_CASE", "11"),
+        ("UUIDX_ERROR_INVALID_IDENTIFIER", "12"),
+        ("UUIDX_ERROR_INVALID_IDENTIFIER_FAMILY", "13"),
         ("UUIDX_FORMAT_CANONICAL", "0"),
         ("UUIDX_FORMAT_SIMPLE", "1"),
         ("UUIDX_FORMAT_URN", "2"),
         ("UUIDX_FORMAT_BRACED", "3"),
+        ("UUIDX_CASE_LOWER", "0"),
+        ("UUIDX_CASE_UPPER", "1"),
+        ("UUIDX_IDENTIFIER_AUTO", "0"),
+        ("UUIDX_IDENTIFIER_UUID", "1"),
+        ("UUIDX_IDENTIFIER_ULID", "2"),
+        ("UUIDX_IDENTIFIER_NANOID", "3"),
+        ("UUIDX_IDENTIFIER_SNOWFLAKE", "4"),
         ("UUIDX_NAMESPACE_DNS", "1"),
         ("UUIDX_NAMESPACE_URL", "2"),
         ("UUIDX_NAMESPACE_OID", "3"),
@@ -921,6 +938,13 @@ fn checked_in_header_matches_the_exported_contract() {
         ("UUIDX_FIELD_PAYLOAD_B", "17u"),
         ("UUIDX_FIELD_PAYLOAD_C", "18u"),
         ("UUIDX_FIELD_VALUE", "19u"),
+        ("UUIDX_FIELD_TIMESTAMP_MS", "20u"),
+        ("UUIDX_FIELD_RANDOM", "21u"),
+        ("UUIDX_FIELD_SIGN", "22u"),
+        ("UUIDX_FIELD_TIMESTAMP_DELTA_MS", "23u"),
+        ("UUIDX_FIELD_DATACENTER_ID", "24u"),
+        ("UUIDX_FIELD_WORKER_ID", "25u"),
+        ("UUIDX_FIELD_SEQUENCE", "26u"),
     ] {
         let expected = format!("#define {name} {value}");
         assert!(
@@ -935,16 +959,21 @@ fn checked_in_header_matches_the_exported_contract() {
         "uuidx_error_message(",
         "uuidx_error_free(",
         "uuidx_uuid_parse(",
+        "uuidx_uuid_parse_namespace(",
         "uuidx_uuid_format(",
+        "uuidx_uuid_format_with_case(",
         "uuidx_uuid_namespace(",
         "uuidx_uuid_generate(",
         "uuidx_uuid_inspect(",
+        "uuidx_identifier_inspect(",
     ] {
         assert!(HEADER.contains(symbol), "header is missing `{symbol}`");
     }
     for declaration in [
         "typedef int32_t uuidx_error_code_t;",
         "typedef int32_t uuidx_format_t;",
+        "typedef int32_t uuidx_case_t;",
+        "typedef int32_t uuidx_identifier_family_t;",
         "typedef int32_t uuidx_namespace_t;",
         "typedef uint8_t uuidx_variant_t;",
         "typedef uint8_t uuidx_metadata_kind_t;",
@@ -956,6 +985,7 @@ fn checked_in_header_matches_the_exported_contract() {
         "typedef struct uuidx_generation_options {",
         "typedef struct uuidx_bit_field {",
         "typedef struct uuidx_inspection {",
+        "typedef struct uuidx_identifier_inspection {",
     ] {
         assert!(
             HEADER.contains(declaration),
@@ -997,6 +1027,13 @@ fn checked_in_header_matches_the_exported_contract() {
         "uint8_t node_id[6];",
         "uint8_t custom[16];",
         "uuidx_bit_field_t fields[7];",
+        "char normalized[40];",
+        "uint64_t timestamp_ms;",
+        "uint64_t snowflake_epoch_ms;",
+        "uint64_t snowflake_value;",
+        "uint64_t ulid_random_high;",
+        "uint64_t ulid_random_low;",
+        "uuidx_inspection_t uuid;",
     ] {
         assert!(
             HEADER.lines().any(|line| line.trim() == field),
@@ -1006,4 +1043,266 @@ fn checked_in_header_matches_the_exported_contract() {
     assert!(HEADER.contains("error. The message is borrowed"));
     assert!(HEADER.contains("uuidx_error_free"));
     assert_eq!(uuidx_abi_version(), UUIDX_ABI_VERSION);
+}
+
+#[test]
+fn format_with_case_and_namespace_parser_support_all_cases_and_errors() {
+    let uuid = parse(b"018f2c0b-6c5b-7d2e-8f4a-123456789abc");
+    for (format, expected) in [
+        (
+            UUIDX_FORMAT_CANONICAL,
+            "018F2C0B-6C5B-7D2E-8F4A-123456789ABC",
+        ),
+        (UUIDX_FORMAT_SIMPLE, "018F2C0B6C5B7D2E8F4A123456789ABC"),
+        (
+            UUIDX_FORMAT_URN,
+            "urn:uuid:018F2C0B-6C5B-7D2E-8F4A-123456789ABC",
+        ),
+        (
+            UUIDX_FORMAT_BRACED,
+            "{018F2C0B-6C5B-7D2E-8F4A-123456789ABC}",
+        ),
+    ] {
+        let mut output = [0 as c_char; 48];
+        let mut required = 0;
+        // SAFETY: All pointers are live and buffer capacity exceeds formatted output.
+        let error = unsafe {
+            uuidx_uuid_format_with_case(
+                &uuid,
+                format,
+                UUIDX_CASE_UPPER,
+                output.as_mut_ptr(),
+                output.len(),
+                &mut required,
+            )
+        };
+        assert!(error.is_null());
+        assert_eq!(required, expected.len() + 1);
+        // SAFETY: Successful formatting wrote a NUL-terminated string.
+        assert_eq!(
+            unsafe { CStr::from_ptr(output.as_ptr()) }.to_str().unwrap(),
+            expected
+        );
+    }
+
+    let mut required = 0;
+    // SAFETY: UUID and output_length are valid; text_case is intentionally invalid.
+    let error = unsafe {
+        uuidx_uuid_format_with_case(
+            &uuid,
+            UUIDX_FORMAT_CANONICAL,
+            99,
+            ptr::null_mut(),
+            0,
+            &mut required,
+        )
+    };
+    // SAFETY: The call returned one owned error.
+    unsafe {
+        assert_error(
+            error,
+            UUIDX_ERROR_INVALID_CASE,
+            "unsupported UUID text case 99",
+        )
+    };
+
+    let mut parsed_ns = MaybeUninit::uninit();
+    // SAFETY: Input and output pointers are valid.
+    let error = unsafe { uuidx_uuid_parse_namespace(b"DNS".as_ptr(), 3, parsed_ns.as_mut_ptr()) };
+    assert!(error.is_null());
+    // SAFETY: Successful namespace parsing initialized `parsed_ns`.
+    assert_eq!(
+        unsafe { parsed_ns.assume_init() },
+        parse(b"6ba7b810-9dad-11d1-80b4-00c04fd430c8")
+    );
+
+    // SAFETY: Null output pointer is intentionally supplied.
+    let error = unsafe { uuidx_uuid_parse_namespace(b"dns".as_ptr(), 3, ptr::null_mut()) };
+    // SAFETY: The call returned one owned error.
+    unsafe { assert_error(error, UUIDX_ERROR_NULL_POINTER, "output must not be null") };
+
+    // SAFETY: Invalid UTF-8 bytes are supplied with valid pointers.
+    let error = unsafe { uuidx_uuid_parse_namespace([0xff].as_ptr(), 1, parsed_ns.as_mut_ptr()) };
+    // SAFETY: The call returned one owned error.
+    unsafe { assert_error(error, UUIDX_ERROR_INVALID_UTF8, "UTF-8") };
+
+    // SAFETY: Invalid namespace text is supplied with valid pointers.
+    let error = unsafe { uuidx_uuid_parse_namespace(b"bad".as_ptr(), 3, parsed_ns.as_mut_ptr()) };
+    // SAFETY: The call returned one owned error.
+    unsafe { assert_error(error, UUIDX_ERROR_INVALID_UUID, "invalid UUID") };
+}
+
+#[test]
+fn identifier_inspection_supports_auto_and_forced_families() {
+    let mut output = MaybeUninit::uninit();
+
+    // UUID auto-detection
+    let uuid_input = b"018F2C0B-6C5B-7D2E-8F4A-123456789ABC";
+    // SAFETY: Input and output pointers are valid.
+    let error = unsafe {
+        uuidx_identifier_inspect(
+            uuid_input.as_ptr(),
+            uuid_input.len(),
+            UUIDX_IDENTIFIER_AUTO,
+            output.as_mut_ptr(),
+        )
+    };
+    assert!(error.is_null());
+    // SAFETY: Successful inspection initialized `output`.
+    let inspected = unsafe { output.assume_init() };
+    assert_eq!(i32::from(inspected.kind), UUIDX_IDENTIFIER_UUID);
+    assert_eq!(inspected.has_bytes, 1);
+    assert_eq!(inspected.uuid.version, 7);
+    assert_eq!(inspected.field_count, 5);
+    // SAFETY: `normalized` is NUL-terminated.
+    assert_eq!(
+        unsafe { CStr::from_ptr(inspected.normalized.as_ptr()) }
+            .to_str()
+            .unwrap(),
+        "018f2c0b-6c5b-7d2e-8f4a-123456789abc"
+    );
+
+    // NanoID forced inspection
+    let nanoid = b"V1StGXR8_Z5jdHi6B-myT";
+    // SAFETY: Input and output pointers are valid.
+    let error = unsafe {
+        uuidx_identifier_inspect(
+            nanoid.as_ptr(),
+            nanoid.len(),
+            UUIDX_IDENTIFIER_NANOID,
+            output.as_mut_ptr(),
+        )
+    };
+    assert!(error.is_null());
+    // SAFETY: Successful inspection initialized `output`.
+    let inspected = unsafe { output.assume_init() };
+    assert_eq!(i32::from(inspected.kind), UUIDX_IDENTIFIER_NANOID);
+    assert_eq!(inspected.has_bytes, 0);
+    assert_eq!(inspected.nanoid_length, 21);
+    assert_eq!(inspected.nanoid_entropy_bits, 126);
+
+    // Snowflake forced inspection
+    let snowflake = b"1724552287438348288";
+    // SAFETY: Input and output pointers are valid.
+    let error = unsafe {
+        uuidx_identifier_inspect(
+            snowflake.as_ptr(),
+            snowflake.len(),
+            UUIDX_IDENTIFIER_SNOWFLAKE,
+            output.as_mut_ptr(),
+        )
+    };
+    assert!(error.is_null());
+    // SAFETY: Successful inspection initialized `output`.
+    let inspected = unsafe { output.assume_init() };
+    assert_eq!(i32::from(inspected.kind), UUIDX_IDENTIFIER_SNOWFLAKE);
+    assert_eq!(inspected.field_count, 5);
+    assert_eq!(inspected.fields[0].name, UUIDX_FIELD_SIGN);
+    assert_eq!(inspected.fields[4].name, UUIDX_FIELD_SEQUENCE);
+
+    #[cfg(feature = "ulid-inspect")]
+    {
+        let ulid = b"01ARZ3NDEKTSV4RRFFQ69G5FAV";
+        // SAFETY: Input and output pointers are valid.
+        let error = unsafe {
+            uuidx_identifier_inspect(
+                ulid.as_ptr(),
+                ulid.len(),
+                UUIDX_IDENTIFIER_ULID,
+                output.as_mut_ptr(),
+            )
+        };
+        assert!(error.is_null());
+        // SAFETY: Successful inspection initialized `output`.
+        let inspected = unsafe { output.assume_init() };
+        assert_eq!(i32::from(inspected.kind), UUIDX_IDENTIFIER_ULID);
+        assert_eq!(inspected.has_bytes, 1);
+        assert_eq!(inspected.timestamp_ms, 1_469_922_850_259);
+        assert_eq!(inspected.field_count, 2);
+        assert_eq!(inspected.fields[0].name, UUIDX_FIELD_TIMESTAMP_MS);
+        assert_eq!(inspected.fields[1].name, UUIDX_FIELD_RANDOM);
+    }
+
+    #[cfg(not(feature = "ulid-inspect"))]
+    {
+        let ulid = b"01ARZ3NDEKTSV4RRFFQ69G5FAV";
+        // SAFETY: Input and output pointers are valid; ULID feature is disabled.
+        let error = unsafe {
+            uuidx_identifier_inspect(
+                ulid.as_ptr(),
+                ulid.len(),
+                UUIDX_IDENTIFIER_ULID,
+                output.as_mut_ptr(),
+            )
+        };
+        // SAFETY: The call returned one owned error.
+        unsafe {
+            assert_error(
+                error,
+                UUIDX_ERROR_INVALID_IDENTIFIER_FAMILY,
+                "ULID inspection is disabled",
+            )
+        };
+    }
+
+    // Error paths: null output, invalid UTF-8, invalid family, mismatched forced family, invalid auto
+    // SAFETY: Null output pointer is intentionally supplied.
+    let error = unsafe {
+        uuidx_identifier_inspect(
+            nanoid.as_ptr(),
+            nanoid.len(),
+            UUIDX_IDENTIFIER_AUTO,
+            ptr::null_mut(),
+        )
+    };
+    // SAFETY: The call returned one owned error.
+    unsafe { assert_error(error, UUIDX_ERROR_NULL_POINTER, "output must not be null") };
+
+    // SAFETY: Invalid UTF-8 bytes are supplied.
+    let error = unsafe {
+        uuidx_identifier_inspect(
+            [0xff].as_ptr(),
+            1,
+            UUIDX_IDENTIFIER_AUTO,
+            output.as_mut_ptr(),
+        )
+    };
+    // SAFETY: The call returned one owned error.
+    unsafe { assert_error(error, UUIDX_ERROR_INVALID_UTF8, "UTF-8") };
+
+    // SAFETY: Invalid family selector is supplied.
+    let error =
+        unsafe { uuidx_identifier_inspect(nanoid.as_ptr(), nanoid.len(), 99, output.as_mut_ptr()) };
+    // SAFETY: The call returned one owned error.
+    unsafe {
+        assert_error(
+            error,
+            UUIDX_ERROR_INVALID_IDENTIFIER_FAMILY,
+            "unsupported identifier family 99",
+        )
+    };
+
+    // SAFETY: Valid NanoID forced as UUID fails with UUIDX_ERROR_INVALID_IDENTIFIER.
+    let error = unsafe {
+        uuidx_identifier_inspect(
+            nanoid.as_ptr(),
+            nanoid.len(),
+            UUIDX_IDENTIFIER_UUID,
+            output.as_mut_ptr(),
+        )
+    };
+    // SAFETY: The call returned one owned error.
+    unsafe { assert_error(error, UUIDX_ERROR_INVALID_IDENTIFIER, "invalid UUID") };
+
+    // SAFETY: Unrecognized input in auto mode fails with UUIDX_ERROR_INVALID_IDENTIFIER.
+    let error = unsafe {
+        uuidx_identifier_inspect(
+            b"bad".as_ptr(),
+            3,
+            UUIDX_IDENTIFIER_AUTO,
+            output.as_mut_ptr(),
+        )
+    };
+    // SAFETY: The call returned one owned error.
+    unsafe { assert_error(error, UUIDX_ERROR_INVALID_IDENTIFIER, "not a supported") };
 }

@@ -49,6 +49,10 @@ impl Uuid {
         self.0.urn().to_string()
     }
 
+    pub fn braced(&self) -> String {
+        self.0.braced().to_string()
+    }
+
     pub(crate) fn from_external(uuid: ExternalUuid) -> Self {
         Self(uuid)
     }
@@ -68,7 +72,7 @@ impl Uuid {
 
 impl fmt::Display for Uuid {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.hyphenated())
+        fmt::Display::fmt(&self.0.hyphenated(), f)
     }
 }
 
@@ -148,19 +152,19 @@ impl InspectableUuidVersion {
         }
     }
 
-    pub const fn number(self) -> Option<u8> {
+    pub const fn number(self) -> u8 {
         match self {
-            Self::V1 => Some(1),
-            Self::V2 => Some(2),
-            Self::V3 => Some(3),
-            Self::V4 => Some(4),
-            Self::V5 => Some(5),
-            Self::V6 => Some(6),
-            Self::V7 => Some(7),
-            Self::V8 => Some(8),
-            Self::Nil => Some(0),
-            Self::Max => Some(15),
-            Self::Unknown(value) => Some(value),
+            Self::V1 => 1,
+            Self::V2 => 2,
+            Self::V3 => 3,
+            Self::V4 => 4,
+            Self::V5 => 5,
+            Self::V6 => 6,
+            Self::V7 => 7,
+            Self::V8 => 8,
+            Self::Nil => 0,
+            Self::Max => 15,
+            Self::Unknown(value) => value,
         }
     }
 }

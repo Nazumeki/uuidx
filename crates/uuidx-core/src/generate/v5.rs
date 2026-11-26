@@ -1,3 +1,4 @@
+use super::{AllowedOptions, reject_unexpected};
 use crate::{GenerateError, GenerationOptions, Uuid};
 use uuid::Uuid as ExternalUuid;
 
@@ -15,31 +16,15 @@ pub(super) fn generate(options: &GenerationOptions) -> Result<Uuid, GenerateErro
             version: options.version,
         })?;
 
-    reject_unused(options)?;
+    reject_unexpected(
+        options,
+        AllowedOptions {
+            name: true,
+            ..AllowedOptions::default()
+        },
+    )?;
     Ok(Uuid::from_external(ExternalUuid::new_v5(
         namespace.external(),
         name,
     )))
-}
-
-fn reject_unused(options: &GenerationOptions) -> Result<(), GenerateError> {
-    if options.node.is_some() {
-        return Err(GenerateError::UnexpectedOption {
-            version: options.version,
-            option: "--node",
-        });
-    }
-    if options.timestamp.is_some() {
-        return Err(GenerateError::UnexpectedOption {
-            version: options.version,
-            option: "--timestamp",
-        });
-    }
-    if options.custom.is_some() {
-        return Err(GenerateError::UnexpectedOption {
-            version: options.version,
-            option: "--custom",
-        });
-    }
-    Ok(())
 }

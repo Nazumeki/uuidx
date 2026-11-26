@@ -1,8 +1,10 @@
 use serde::Serialize;
 use uuidx_core::{
-    BitField, IdentifierInspection, Uuid, UuidInspection, UuidMetadata, UuidOutputFormat,
-    inspect_uuid,
+    BitField, IdentifierInspection, InspectableUuidVersion, Uuid, UuidInspection, UuidMetadata,
+    UuidOutputFormat,
 };
+
+use super::{conversion_warnings, inspection_warnings};
 
 #[derive(Debug, Serialize)]
 pub struct JsonRecord {
@@ -94,7 +96,7 @@ impl JsonRecord {
         value: &str,
         version: &str,
         format: UuidOutputFormat,
-        warnings: &[String],
+        warnings: &[&str],
     ) -> Self {
         Self {
             schema_version: 1,
@@ -110,7 +112,10 @@ impl JsonRecord {
             metadata: None,
             fields: None,
             error: None,
-            warnings: warnings.to_vec(),
+            warnings: warnings
+                .iter()
+                .map(|warning| (*warning).to_owned())
+                .collect(),
         }
     }
 
@@ -130,7 +135,7 @@ impl JsonRecord {
         value: &str,
         format: UuidOutputFormat,
     ) -> Self {
-        let inspection = inspect_uuid(uuid);
+        let version = InspectableUuidVersion::from_uuid(uuid);
         Self {
             schema_version: 1,
             operation: "convert".to_owned(),
@@ -140,20 +145,15 @@ impl JsonRecord {
             value: Some(value.to_owned()),
             bytes: Some(hex::encode(uuid.as_bytes())),
             kind: Some("uuid".to_owned()),
-            version: Some(inspection.version.to_string()),
+            version: Some(version.to_string()),
             metadata: None,
             fields: None,
             error: None,
             format: Some(format.to_string()),
-            warnings: match inspection.version {
-                uuidx_core::InspectableUuidVersion::V3 => {
-                    vec!["UUID v3 uses legacy MD5 name hashing".to_owned()]
-                }
-                uuidx_core::InspectableUuidVersion::V5 => {
-                    vec!["UUID v5 uses legacy SHA-1 name hashing".to_owned()]
-                }
-                _ => Vec::new(),
-            },
+            warnings: conversion_warnings(version)
+                .iter()
+                .map(|warning| (*warning).to_owned())
+                .collect(),
         }
     }
 
@@ -316,7 +316,10 @@ impl JsonRecord {
             metadata: Some(metadata(inspection, redact_sensitive)),
             fields: Some(inspection.fields.iter().map(JsonBitField::from).collect()),
             error: None,
-            warnings: warnings_for(inspection),
+            warnings: inspection_warnings(inspection.version)
+                .iter()
+                .map(|warning| (*warning).to_owned())
+                .collect(),
         }
     }
 }
@@ -363,24 +366,6 @@ fn metadata(inspection: &UuidInspection, redact_sensitive: bool) -> JsonMetadata
     }
 }
 
-fn warnings_for(inspection: &UuidInspection) -> Vec<String> {
-    match inspection.version {
-        uuidx_core::InspectableUuidVersion::V1 => {
-            vec!["UUID v1 exposes timestamp and node metadata".to_owned()]
-        }
-        uuidx_core::InspectableUuidVersion::V2 => {
-            vec!["UUID v2 DCE Security semantics are outside RFC 9562".to_owned()]
-        }
-        uuidx_core::InspectableUuidVersion::V3 => {
-            vec!["UUID v3 uses legacy MD5 name hashing".to_owned()]
-        }
-        uuidx_core::InspectableUuidVersion::V5 => {
-            vec!["UUID v5 uses legacy SHA-1 name hashing".to_owned()]
-        }
-        _ => Vec::new(),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -407,7 +392,7 @@ mod tests {
             "018f2c0b-6c5b-7d2e-8f4a-123456789abc",
             "v7",
             UuidOutputFormat::Canonical,
-            &["warning".to_owned()],
+            &["warning"],
         );
         let generated_json = serde_json::to_value(generated).unwrap();
         assert_eq!(generated_json["operation"], "generate");
@@ -460,6 +445,29 @@ mod tests {
         assert_eq!(validated_json["version"], "v7");
         assert_eq!(validated_json["bytes"], "018f2c0b6c5b7d2e8f4a123456789abc");
         assert_eq!(validated_json["format"], serde_json::Value::Null);
+
+        let nanoid = uuidx_core::inspect_nanoid("V1StGXR8_Z5jdHi6B-myT").unwrap();
+        let validated_nanoid = serde_json::to_value(JsonRecord::validated(
+            6,
+            "V1StGXR8_Z5jdHi6B-myT",
+            &IdentifierInspection::Nanoid(nanoid),
+        ))
+        .unwrap();
+        assert_eq!(validated_nanoid["kind"], "nanoid");
+        assert!(validated_nanoid["bytes"].is_null());
+
+        #[cfg(feature = "ulid-inspect")]
+        {
+            let ulid = uuidx_core::inspect_ulid("01ARZ3NDEKTSV4RRFFQ69G5FAV").unwrap();
+            let validated_ulid = serde_json::to_value(JsonRecord::validated(
+                7,
+                "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+                &IdentifierInspection::Ulid(ulid),
+            ))
+            .unwrap();
+            assert_eq!(validated_ulid["kind"], "ulid");
+            assert!(validated_ulid["bytes"].is_string());
+        }
 
         let error = JsonRecord::error("inspect", 6, "bad", "invalid_identifier", "invalid");
         let error_json = serde_json::to_value(error).unwrap();

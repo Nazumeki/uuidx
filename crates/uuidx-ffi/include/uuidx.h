@@ -32,12 +32,26 @@ typedef int32_t uuidx_error_code_t;
 #define UUIDX_ERROR_GENERATION 8
 #define UUIDX_ERROR_PANIC 9
 #define UUIDX_ERROR_INTERNAL 10
+#define UUIDX_ERROR_INVALID_CASE 11
+#define UUIDX_ERROR_INVALID_IDENTIFIER 12
+#define UUIDX_ERROR_INVALID_IDENTIFIER_FAMILY 13
 
 typedef int32_t uuidx_format_t;
 #define UUIDX_FORMAT_CANONICAL 0
 #define UUIDX_FORMAT_SIMPLE 1
 #define UUIDX_FORMAT_URN 2
 #define UUIDX_FORMAT_BRACED 3
+
+typedef int32_t uuidx_case_t;
+#define UUIDX_CASE_LOWER 0
+#define UUIDX_CASE_UPPER 1
+
+typedef int32_t uuidx_identifier_family_t;
+#define UUIDX_IDENTIFIER_AUTO 0
+#define UUIDX_IDENTIFIER_UUID 1
+#define UUIDX_IDENTIFIER_ULID 2
+#define UUIDX_IDENTIFIER_NANOID 3
+#define UUIDX_IDENTIFIER_SNOWFLAKE 4
 
 typedef int32_t uuidx_namespace_t;
 #define UUIDX_NAMESPACE_DNS 1
@@ -90,6 +104,13 @@ typedef uint8_t uuidx_field_name_t;
 #define UUIDX_FIELD_PAYLOAD_B 17u
 #define UUIDX_FIELD_PAYLOAD_C 18u
 #define UUIDX_FIELD_VALUE 19u
+#define UUIDX_FIELD_TIMESTAMP_MS 20u
+#define UUIDX_FIELD_RANDOM 21u
+#define UUIDX_FIELD_SIGN 22u
+#define UUIDX_FIELD_TIMESTAMP_DELTA_MS 23u
+#define UUIDX_FIELD_DATACENTER_ID 24u
+#define UUIDX_FIELD_WORKER_ID 25u
+#define UUIDX_FIELD_SEQUENCE 26u
 
 typedef struct uuidx_error uuidx_error_t;
 
@@ -147,6 +168,29 @@ typedef struct uuidx_inspection {
     uuidx_bit_field_t fields[7];
 } uuidx_inspection_t;
 
+typedef struct uuidx_identifier_inspection {
+    uint8_t kind;
+    uint8_t has_bytes;
+    uint8_t normalized_length;
+    uint8_t nanoid_length;
+    uint16_t nanoid_entropy_bits;
+    uint16_t snowflake_sequence;
+    uint8_t snowflake_datacenter_id;
+    uint8_t snowflake_worker_id;
+    uint8_t field_count;
+    uint8_t reserved;
+    char normalized[40];
+    uint8_t bytes[16];
+    uint8_t reserved2[4];
+    uint64_t timestamp_ms;
+    uint64_t snowflake_epoch_ms;
+    uint64_t snowflake_value;
+    uint64_t ulid_random_high;
+    uint64_t ulid_random_low;
+    uuidx_inspection_t uuid;
+    uuidx_bit_field_t fields[7];
+} uuidx_identifier_inspection_t;
+
 UUIDX_API uint32_t uuidx_abi_version(void);
 
 /*
@@ -166,6 +210,12 @@ UUIDX_API uuidx_error_t *uuidx_uuid_parse(
     uuidx_uuid_t *output
 );
 
+UUIDX_API uuidx_error_t *uuidx_uuid_parse_namespace(
+    const uint8_t *input,
+    size_t input_length,
+    uuidx_uuid_t *output
+);
+
 /*
  * For a valid UUID and format, output_length receives the required byte count
  * including the NUL. Pass output = NULL and output_capacity = 0 to query it.
@@ -173,6 +223,15 @@ UUIDX_API uuidx_error_t *uuidx_uuid_parse(
 UUIDX_API uuidx_error_t *uuidx_uuid_format(
     const uuidx_uuid_t *uuid,
     uuidx_format_t format,
+    char *output,
+    size_t output_capacity,
+    size_t *output_length
+);
+
+UUIDX_API uuidx_error_t *uuidx_uuid_format_with_case(
+    const uuidx_uuid_t *uuid,
+    uuidx_format_t format,
+    uuidx_case_t text_case,
     char *output,
     size_t output_capacity,
     size_t *output_length
@@ -191,6 +250,13 @@ UUIDX_API uuidx_error_t *uuidx_uuid_generate(
 UUIDX_API uuidx_error_t *uuidx_uuid_inspect(
     const uuidx_uuid_t *uuid,
     uuidx_inspection_t *output
+);
+
+UUIDX_API uuidx_error_t *uuidx_identifier_inspect(
+    const uint8_t *input,
+    size_t input_length,
+    uuidx_identifier_family_t family,
+    uuidx_identifier_inspection_t *output
 );
 
 #ifdef __cplusplus

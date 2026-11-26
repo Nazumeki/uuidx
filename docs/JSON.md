@@ -116,7 +116,8 @@ uses this metadata shape:
 ```
 
 The ULID `bytes` member duplicates the record-level `bytes` value. ULIDs are
-never generated, validated, or converted as UUIDs.
+never generated, converted, or accepted by default UUID validation (use
+`validate --type ulid` to validate ULIDs explicitly).
 
 Standard NanoID inspection uses this metadata shape:
 
@@ -190,7 +191,6 @@ current warnings are:
 | Generate UUID v8                      | `UUID v8 uniqueness is application-defined`           |
 | Inspect UUID v1                       | `UUID v1 exposes timestamp and node metadata`         |
 | Inspect UUID v2                       | `UUID v2 DCE Security semantics are outside RFC 9562` |
-| Inspect UUID v3                       | `UUID v3 uses legacy MD5 name hashing`                |
 
 ## Errors and batches
 

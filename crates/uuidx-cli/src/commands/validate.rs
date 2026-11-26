@@ -78,6 +78,10 @@ mod tests {
             Vec::new(),
         );
         assert!(run(&args(&["not-a-uuid"]), &mut output).unwrap());
+
+        let mut typed = args(&["not-a-nanoid"]);
+        typed.kind = Some(crate::cli::IdentifierTypeArg::Nanoid);
+        assert!(run(&typed, &mut output).unwrap());
     }
 
     #[test]

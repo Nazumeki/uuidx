@@ -5,8 +5,9 @@ use std::{
 
 use serde::Deserialize;
 use uuidx_core::{
-    GeneratableUuidVersion, GenerationOptions, Uuid, UuidOutputFormat, format_uuid, generate_uuid,
-    parse_hex_array, parse_uuid,
+    GeneratableUuidVersion, GenerationOptions, UuidOutputFormat, UuidTextCase,
+    format_uuid_with_case, generate_uuid, parse_hex_array, parse_namespace as core_parse_namespace,
+    parse_uuid,
 };
 
 use crate::error::ApiError;
@@ -22,22 +23,25 @@ pub(crate) struct GenerationInput {
     timestamp_ms: Option<f64>,
     custom: Option<String>,
     format: Option<String>,
+    case: Option<String>,
 }
 
 pub(crate) fn generate(version: &str, input: GenerationInput) -> Result<String, ApiError> {
     let version = GeneratableUuidVersion::from_str(version)
         .map_err(|message| ApiError::new("unsupported_version", message))?;
     let format = parse_format(input.format.as_deref())?;
+    let case = parse_case(input.case.as_deref())?;
     let options = build_options(version, input)?;
     let uuid = generate_uuid(&options)
         .map_err(|error| ApiError::new("generation_failed", error.to_string()))?;
-    Ok(format_uuid(&uuid, format))
+    Ok(format_uuid_with_case(&uuid, format, case))
 }
 
-pub(crate) fn format(input: &str, format: &str) -> Result<String, ApiError> {
+pub(crate) fn format(input: &str, format: &str, case: Option<&str>) -> Result<String, ApiError> {
     let uuid = parse_uuid(input)?;
     let format = parse_format(Some(format))?;
-    Ok(format_uuid(&uuid, format))
+    let case = parse_case(case)?;
+    Ok(format_uuid_with_case(&uuid, format, case))
 }
 
 fn build_options(
@@ -64,16 +68,9 @@ fn build_options(
     Ok(options)
 }
 
-fn parse_namespace(value: &str) -> Result<Uuid, ApiError> {
-    match value.to_ascii_lowercase().as_str() {
-        "dns" => Ok(Uuid::NAMESPACE_DNS),
-        "url" => Ok(Uuid::NAMESPACE_URL),
-        "oid" => Ok(Uuid::NAMESPACE_OID),
-        "x500" => Ok(Uuid::NAMESPACE_X500),
-        _ => {
-            parse_uuid(value).map_err(|error| ApiError::new("invalid_namespace", error.to_string()))
-        }
-    }
+fn parse_namespace(value: &str) -> Result<uuidx_core::Uuid, ApiError> {
+    core_parse_namespace(value)
+        .map_err(|error| ApiError::new("invalid_namespace", error.to_string()))
 }
 
 fn parse_node(value: &str) -> Result<Option<[u8; 6]>, ApiError> {
@@ -113,6 +110,14 @@ fn parse_format(value: Option<&str>) -> Result<UuidOutputFormat, ApiError> {
         Some(value) => UuidOutputFormat::from_str(value)
             .map_err(|message| ApiError::new("unsupported_format", message)),
         None => Ok(UuidOutputFormat::Canonical),
+    }
+}
+
+fn parse_case(value: Option<&str>) -> Result<UuidTextCase, ApiError> {
+    match value {
+        Some(value) => UuidTextCase::from_str(value)
+            .map_err(|message| ApiError::new("unsupported_case", message)),
+        None => Ok(UuidTextCase::Lower),
     }
 }
 
@@ -160,6 +165,13 @@ mod tests {
         let simple = generate("v7", input(r#"{"format":"simple"}"#)).unwrap();
         assert_eq!(simple.len(), 32);
 
+        let upper_urn = generate(
+            "v5",
+            input(r#"{"namespace":"dns","name":"example.org","format":"urn","case":"upper"}"#),
+        )
+        .unwrap();
+        assert_eq!(upper_urn, "urn:uuid:AAD03681-8B63-5304-89E0-8CA8F49461B5");
+
         let error = generate("v4", input(r#"{"name":"unused"}"#)).unwrap_err();
         assert_eq!(error.code(), "generation_failed");
     }
@@ -169,6 +181,7 @@ mod tests {
         let cases = [
             ("v2", "{}", "unsupported_version"),
             ("v4", r#"{"format":"compact"}"#, "unsupported_format"),
+            ("v4", r#"{"case":"title"}"#, "unsupported_case"),
             (
                 "v3",
                 r#"{"namespace":"not-a-namespace","name":"value"}"#,
@@ -189,6 +202,7 @@ mod tests {
 
     #[test]
     fn namespaces_accept_all_aliases_case_insensitively_and_explicit_uuids() {
+        use uuidx_core::Uuid;
         for (namespace, expected) in [
             ("DNS", Uuid::NAMESPACE_DNS),
             ("url", Uuid::NAMESPACE_URL),
@@ -243,26 +257,47 @@ mod tests {
     #[test]
     fn formatting_covers_all_public_formats() {
         const UUID: &str = "018f2c0b-6c5b-7d2e-8f4a-123456789abc";
-        assert_eq!(format(UUID, "canonical").unwrap(), UUID);
+        assert_eq!(format(UUID, "canonical", None).unwrap(), UUID);
         assert_eq!(
-            format(UUID, "simple").unwrap(),
+            format(UUID, "simple", None).unwrap(),
             "018f2c0b6c5b7d2e8f4a123456789abc"
         );
-        assert_eq!(format(UUID, "urn").unwrap(), format!("urn:uuid:{UUID}"));
-        assert_eq!(format(UUID, "braced").unwrap(), format!("{{{UUID}}}"));
+        assert_eq!(
+            format(UUID, "urn", Some("lower")).unwrap(),
+            format!("urn:uuid:{UUID}")
+        );
+        assert_eq!(
+            format(UUID, "urn", Some("upper")).unwrap(),
+            "urn:uuid:018F2C0B-6C5B-7D2E-8F4A-123456789ABC"
+        );
+        assert_eq!(format(UUID, "braced", None).unwrap(), format!("{{{UUID}}}"));
+        assert_eq!(
+            format(UUID, "braced", Some("upper")).unwrap(),
+            "{018F2C0B-6C5B-7D2E-8F4A-123456789ABC}"
+        );
     }
 
     #[test]
     fn formatting_rejects_invalid_uuid_and_format_values() {
         assert_eq!(
-            format("not-a-uuid", "canonical").unwrap_err().code(),
+            format("not-a-uuid", "canonical", None).unwrap_err().code(),
             "invalid_uuid"
         );
         assert_eq!(
-            format("018f2c0b-6c5b-7d2e-8f4a-123456789abc", "compact")
+            format("018f2c0b-6c5b-7d2e-8f4a-123456789abc", "compact", None)
                 .unwrap_err()
                 .code(),
             "unsupported_format"
+        );
+        assert_eq!(
+            format(
+                "018f2c0b-6c5b-7d2e-8f4a-123456789abc",
+                "canonical",
+                Some("mixed")
+            )
+            .unwrap_err()
+            .code(),
+            "unsupported_case"
         );
     }
 
