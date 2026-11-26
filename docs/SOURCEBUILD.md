@@ -57,9 +57,9 @@ the user `PATH` as described in [`INSTALLATION.md`](INSTALLATION.md).
 | Package | Default | Effect |
 | --- | --- | --- |
 | `uuidx-core` | None | Adds read-only ULID inspection when enabled explicitly. |
-| `uuidx-cli` | `ulid-inspect` | Enables ULID recognition in `uuidx inspect`. |
-| `uuidx-wasm` | `ulid-inspect` | Exposes ULID inspection to JavaScript. |
-| `uuidx-ffi` | None | No optional features. |
+| `uuidx-cli` | `ulid-inspect` | Enables ULID recognition in `uuidx inspect` and `uuidx validate --type ulid`. |
+| `uuidx-wasm` | `ulid-inspect` | Exposes ULID inspection and validation to JavaScript. |
+| `uuidx-ffi` | `ulid-inspect` | Enables ULID inspection in `uuidx_identifier_inspect`. |
 
 Build a smaller CLI without ULID inspection:
 
@@ -123,7 +123,7 @@ install a matching `wasm-bindgen-cli` and pass the resulting `.wasm` file to
 `wasm-bindgen`:
 
 ```console
-cargo install wasm-bindgen-cli --version 0.2.127 --locked
+cargo install wasm-bindgen-cli --version 0.2.129 --locked
 wasm-bindgen target/wasm32-unknown-unknown/debug/uuidx_wasm.wasm --out-dir pkg --target web
 ```
 

@@ -643,7 +643,9 @@ fn help_lists_the_user_facing_commands() {
     assert!(help.contains("convert"));
     assert!(help.contains("generate  Generate UUID v3-v8 values [alias: g]"));
     assert!(help.contains("inspect   Inspect UUID, ULID, NanoID, and Snowflake values [alias: i]"));
-    assert!(help.contains("validate  Validate UUID syntax and version structure [alias: v]"));
+    assert!(
+        help.contains("validate  Validate UUID, ULID, NanoID, and Snowflake values [alias: v]")
+    );
     assert!(
         help.contains("convert   Convert UUID text between standard textual formats [alias: c]")
     );
@@ -927,5 +929,49 @@ fn scoped_help_lists_type_and_case_options() {
         assert!(output.status.success());
         let help = String::from_utf8(output.stdout).expect("help should be UTF-8");
         assert!(help.contains("--case"), "{command} help should list --case");
+    }
+}
+
+#[test]
+fn pretty_convert_emits_legacy_hash_warnings_and_validate_shows_family() {
+    let converted = run(&[
+        "convert",
+        "04738bdf-b25a-3829-a801-b21a1d25095b",
+        "--to",
+        "urn",
+        "--output",
+        "pretty",
+    ]);
+    assert!(converted.status.success());
+    let text = String::from_utf8(converted.stdout).expect("stdout should be UTF-8");
+    assert!(text.contains("UUID v3 uses legacy MD5 name hashing"));
+
+    let validated = run(&[
+        "validate",
+        "V1StGXR8_Z5jdHi6B-myT",
+        "--type",
+        "nanoid",
+        "--output",
+        "pretty",
+    ]);
+    assert!(validated.status.success());
+    let validated_text = String::from_utf8(validated.stdout).expect("stdout should be UTF-8");
+    assert!(validated_text.contains("[ok] #0 nanoid V1StGXR8_Z5jdHi6B-myT"));
+}
+
+#[test]
+fn generate_v7_batch_is_strictly_monotonic() {
+    let output = run(&["generate", "v7", "--count", "32", "--output", "plain"]);
+    assert!(output.status.success());
+    let text = String::from_utf8(output.stdout).expect("stdout should be UTF-8");
+    let lines: Vec<&str> = text.lines().collect();
+    assert_eq!(lines.len(), 32);
+    for pair in lines.windows(2) {
+        assert!(
+            pair[0] < pair[1],
+            "expected strictly monotonic batch output, got {} >= {}",
+            pair[0],
+            pair[1]
+        );
     }
 }

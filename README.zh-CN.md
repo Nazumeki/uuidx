@@ -109,7 +109,7 @@ uuidx [OPTIONS] <COMMAND>
 | ---------- | ---- | -------------------------------------------- |
 | `generate` | `g`  | 生成 UUID v3-v8 值。                         |
 | `inspect`  | `i`  | 检查 UUID 及受支持的标识符族。               |
-| `validate` | `v`  | 批量校验 UUID 语法。                         |
+| `validate` | `v`  | 批量校验 UUID 及受支持的标识符族。           |
 | `convert`  | `c`  | 转换 canonical、simple、URN 和 braced 形式。 |
 
 全局输出模式为 `auto`、`pretty`、`plain` 和 `json`。使用
@@ -144,8 +144,9 @@ println!("{value}");
 ### WebAssembly
 
 `uuidx-wasm` 通过 `wasm-bindgen` 导出 `generateUuid`、`validateUuid`、
-`formatUuid`、`inspectUuid`、`inspectIdentifier`、`inspectUlid`、
-`inspectNanoid` 和 `inspectSnowflake`。构建受支持的目标：
+`validateIdentifier`、`formatUuid`、`inspectUuid`、`inspectIdentifier`、
+`inspectUlid`、`inspectNanoid` 和 `inspectSnowflake`，支持 UUID 大小写控制、强制
+标识符族选择以及敏感节点脱敏。构建受支持的目标：
 
 ```console
 rustup target add wasm32-unknown-unknown
@@ -154,7 +155,8 @@ just build-wasm
 
 ### C ABI
 
-`uuidx-ffi` 构建静态库和动态库，并在
+`uuidx-ffi` 构建静态库和动态库（涵盖 UUID 解析、命名空间解析、大小写格式化、生成
+以及多标识符族检查），并在
 [`crates/uuidx-ffi/include/uuidx.h`](crates/uuidx-ffi/include/uuidx.h) 发布其头文件：
 
 ```console

@@ -26,10 +26,10 @@ implements UUID bit rules.
 | ---------------------- | ---------------------------------------------------------------------------- |
 | `types.rs`             | Public generation/inspection enums, options, variants, and UUID type exports |
 | `error.rs`             | Domain errors for parsing, hex payloads, and generation options              |
-| `parse.rs`             | UUID text parsing through the `uuid` crate                                   |
-| `format.rs`            | Canonical, simple, URN, and braced UUID formats plus fixed-size hex payloads |
-| `generate/`            | Version-specific v3-v8 generation modules                                    |
-| `inspect/`             | UUID metadata plus automatic identifier-family recognition                   |
+| `parse.rs`             | UUID text and RFC namespace alias parsing through the `uuid` crate           |
+| `format.rs`            | Canonical, simple, URN, and braced UUID formats plus text case and hex arrays |
+| `generate/`            | Version-specific v3-v8 generation modules (including monotonic v7 context)   |
+| `inspect/`             | UUID metadata plus automatic and forced identifier-family recognition        |
 | `inspect/nanoid.rs`    | Standard 21-character NanoID inspection                                      |
 | `inspect/snowflake.rs` | Original Twitter Snowflake decoding                                          |
 | `inspect/ulid.rs`      | Optional ULID parsing for read-only inspection                               |
@@ -70,19 +70,23 @@ from leaking into pipeline or JSON output.
 
 `uuidx-wasm` exports the core generation, validation, formatting, and
 inspection operations through `wasm-bindgen`. It converts JavaScript option
-objects and result objects at the boundary, represents wide numeric inspection
-fields without losing precision, and maps domain failures to JavaScript errors
-with stable codes. Automatic identifier detection is owned by the core so the
-CLI and WebAssembly adapters share one recognition order. Optional ULID
-inspection follows the core feature gate.
+objects and result objects at the boundary, supports UUID text case, forced
+identifier-family selection/validation, and sensitive node redaction, represents
+wide numeric inspection fields without losing precision, and maps domain
+failures to JavaScript errors with stable codes. Automatic and forced identifier
+detection are owned by the core so the CLI, WebAssembly, and C ABI adapters
+share one recognition contract. Optional ULID inspection follows the core
+feature gate.
 
 ## FFI crate
 
-`uuidx-ffi` exposes a C ABI for the same core operations. It enforces its
-null-pointer, length, UTF-8, and value contracts, converts domain results into
-ABI-safe values, and owns the error allocation/freeing contract. Its public
-header is part of the exported interface and must stay synchronized with the
-Rust symbols.
+`uuidx-ffi` exposes a C ABI for the same core operations, including namespace
+alias resolution, lowercase/uppercase UUID formatting, and automatic or forced
+multi-family identifier inspection. It enforces its null-pointer, length, UTF-8,
+and value contracts, converts domain results into fixed-size ABI-safe values,
+and owns the error allocation/freeing contract. Optional ULID inspection follows
+the core feature gate. Its public header is part of the exported interface and
+must stay synchronized with the Rust symbols.
 
 ## CLI data flow
 

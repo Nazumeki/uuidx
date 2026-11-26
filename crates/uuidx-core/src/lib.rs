@@ -1,8 +1,9 @@
-//! UUID domain logic used by the `uuidx` command-line application.
+//! Domain logic for UUID generation, parsing, formatting, validation, and
+//! multi-family identifier inspection.
 //!
-//! This crate intentionally has no CLI, terminal, or JSON dependencies. It
-//! owns the UUID contract while the companion CLI crate owns presentation and
-//! process orchestration.
+//! This crate intentionally has no CLI, terminal, JavaScript, C ABI, or JSON
+//! dependencies. It owns the domain policy while `uuidx-cli`, `uuidx-wasm`, and
+//! `uuidx-ffi` handle presentation and language-boundary conversion.
 
 mod error;
 mod format;
@@ -31,7 +32,7 @@ pub use inspect::{
     BitField, NameHashAlgorithm, NodeKind, TimestampInfo, UuidInspection, UuidMetadata,
     inspect_uuid,
 };
-pub use parse::parse_uuid;
+pub use parse::{parse_namespace, parse_uuid};
 pub use types::{
     GeneratableUuidVersion, GenerationOptions, InspectableUuidVersion, Uuid, UuidVariant,
 };

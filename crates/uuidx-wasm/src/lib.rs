@@ -15,25 +15,18 @@ mod error;
 mod generation;
 mod inspection;
 
-use serde::Serialize;
+use serde::{Serialize, de::DeserializeOwned};
 use wasm_bindgen::prelude::*;
 
-use crate::{error::ApiError, generation::GenerationInput};
+use crate::{
+    error::ApiError,
+    generation::GenerationInput,
+    inspection::{IdentifierInspectInput, UuidInspectInput},
+};
 
 #[wasm_bindgen(js_name = generateUuid, skip_typescript)]
 pub fn generate_uuid(version: &str, options: Option<JsValue>) -> Result<String, JsValue> {
-    let options = match options {
-        None => GenerationInput::default(),
-        Some(value) if value.is_null() || value.is_undefined() => GenerationInput::default(),
-        Some(value) => serde_wasm_bindgen::from_value(value).map_err(|error| {
-            ApiError::new(
-                "invalid_options",
-                format!("invalid generation options: {error}"),
-            )
-            .into_js()
-        })?,
-    };
-
+    let options: GenerationInput = from_optional_js(options, "generation")?;
     generation::generate(version, options).map_err(ApiError::into_js)
 }
 
@@ -42,20 +35,32 @@ pub fn validate_uuid(input: &str) -> bool {
     uuidx_core::parse_uuid(input).is_ok()
 }
 
+#[wasm_bindgen(js_name = validateIdentifier, skip_typescript)]
+pub fn validate_identifier(input: &str, family: Option<String>) -> Result<bool, JsValue> {
+    inspection::validate_identifier(input, family.as_deref()).map_err(ApiError::into_js)
+}
+
 #[wasm_bindgen(js_name = formatUuid, skip_typescript)]
-pub fn format_uuid(input: &str, format: &str) -> Result<String, JsValue> {
-    generation::format(input, format).map_err(ApiError::into_js)
+pub fn format_uuid(
+    input: &str,
+    format: &str,
+    text_case: Option<String>,
+) -> Result<String, JsValue> {
+    generation::format(input, format, text_case.as_deref()).map_err(ApiError::into_js)
 }
 
 #[wasm_bindgen(js_name = inspectUuid, skip_typescript)]
-pub fn inspect_uuid(input: &str) -> Result<JsValue, JsValue> {
-    let inspection = inspection::inspect(input).map_err(ApiError::into_js)?;
+pub fn inspect_uuid(input: &str, options: Option<JsValue>) -> Result<JsValue, JsValue> {
+    let options: UuidInspectInput = from_optional_js(options, "inspection")?;
+    let inspection =
+        inspection::inspect(input, options.redact_sensitive).map_err(ApiError::into_js)?;
     to_js_value(&inspection)
 }
 
 #[wasm_bindgen(js_name = inspectIdentifier, skip_typescript)]
-pub fn inspect_identifier(input: &str) -> Result<JsValue, JsValue> {
-    let inspection = inspection::inspect_identifier(input).map_err(ApiError::into_js)?;
+pub fn inspect_identifier(input: &str, options: Option<JsValue>) -> Result<JsValue, JsValue> {
+    let options: IdentifierInspectInput = from_optional_js(options, "inspection")?;
+    let inspection = inspection::inspect_identifier(input, options).map_err(ApiError::into_js)?;
     to_js_value(&inspection)
 }
 
@@ -78,6 +83,23 @@ pub fn inspect_snowflake(input: &str) -> Result<JsValue, JsValue> {
     to_js_value(&inspection)
 }
 
+fn from_optional_js<T: Default + DeserializeOwned>(
+    options: Option<JsValue>,
+    context: &str,
+) -> Result<T, JsValue> {
+    match options {
+        None => Ok(T::default()),
+        Some(value) if value.is_null() || value.is_undefined() => Ok(T::default()),
+        Some(value) => serde_wasm_bindgen::from_value(value).map_err(|error| {
+            ApiError::new(
+                "invalid_options",
+                format!("invalid {context} options: {error}"),
+            )
+            .into_js()
+        }),
+    }
+}
+
 fn to_js_value(value: &impl Serialize) -> Result<JsValue, JsValue> {
     value
         .serialize(&serde_wasm_bindgen::Serializer::json_compatible())
@@ -94,6 +116,7 @@ fn to_js_value(value: &impl Serialize) -> Result<JsValue, JsValue> {
 const TYPESCRIPT_TYPES: &str = r#"
 export type UuidVersion = "v3" | "v4" | "v5" | "v6" | "v7" | "v8";
 export type UuidFormat = "canonical" | "simple" | "urn" | "braced";
+export type UuidTextCase = "lower" | "upper";
 export type UuidVariant = "ncs" | "rfc9562" | "microsoft" | "future";
 
 export interface GenerationOptions {
@@ -103,6 +126,11 @@ export interface GenerationOptions {
   timestampMs?: number;
   custom?: string;
   format?: UuidFormat;
+  case?: UuidTextCase;
+}
+
+export interface UuidInspectOptions {
+  redactSensitive?: boolean;
 }
 
 export interface BitField {
@@ -157,12 +185,13 @@ export interface SnowflakeInspection {
   datacenterId: number;
   workerId: number;
   sequence: number;
+  fields: BitField[];
 }
 
 export function generateUuid(version: UuidVersion | string, options?: GenerationOptions): string;
 export function validateUuid(input: string): boolean;
-export function formatUuid(input: string, format: UuidFormat | string): string;
-export function inspectUuid(input: string): UuidInspection;
+export function formatUuid(input: string, format: UuidFormat | string, textCase?: UuidTextCase | string): string;
+export function inspectUuid(input: string, options?: UuidInspectOptions): UuidInspection;
 export function inspectNanoid(input: string): NanoidInspection;
 export function inspectSnowflake(input: string): SnowflakeInspection;
 "#;
@@ -176,6 +205,7 @@ export interface UlidInspection {
   bytes: string;
   timestampMs: number;
   random: string;
+  fields: BitField[];
 }
 
 export function inspectUlid(input: string): UlidInspection;
@@ -184,24 +214,40 @@ export function inspectUlid(input: string): UlidInspection;
 #[cfg(feature = "ulid-inspect")]
 #[wasm_bindgen(typescript_custom_section)]
 const IDENTIFIER_TYPES: &str = r#"
+export type IdentifierFamily = "uuid" | "ulid" | "nanoid" | "snowflake";
+
+export interface IdentifierInspectOptions {
+  type?: IdentifierFamily | string;
+  redactSensitive?: boolean;
+}
+
 export type IdentifierInspection =
   | UuidInspection
   | UlidInspection
   | NanoidInspection
   | SnowflakeInspection;
 
-export function inspectIdentifier(input: string): IdentifierInspection;
+export function validateIdentifier(input: string, family?: IdentifierFamily | string): boolean;
+export function inspectIdentifier(input: string, options?: IdentifierInspectOptions): IdentifierInspection;
 "#;
 
 #[cfg(not(feature = "ulid-inspect"))]
 #[wasm_bindgen(typescript_custom_section)]
 const IDENTIFIER_TYPES: &str = r#"
+export type IdentifierFamily = "uuid" | "nanoid" | "snowflake";
+
+export interface IdentifierInspectOptions {
+  type?: IdentifierFamily | string;
+  redactSensitive?: boolean;
+}
+
 export type IdentifierInspection =
   | UuidInspection
   | NanoidInspection
   | SnowflakeInspection;
 
-export function inspectIdentifier(input: string): IdentifierInspection;
+export function validateIdentifier(input: string, family?: IdentifierFamily | string): boolean;
+export function inspectIdentifier(input: string, options?: IdentifierInspectOptions): IdentifierInspection;
 "#;
 
 #[cfg(test)]
@@ -213,6 +259,9 @@ mod tests {
         assert!(validate_uuid("018f2c0b-6c5b-7d2e-8f4a-123456789abc"));
         assert!(validate_uuid("018f2c0b6c5b7d2e8f4a123456789abc"));
         assert!(!validate_uuid("not-a-uuid"));
+        assert!(validate_identifier("V1StGXR8_Z5jdHi6B-myT", None).unwrap());
+        assert!(validate_identifier("V1StGXR8_Z5jdHi6B-myT", Some("nanoid".to_owned())).unwrap());
+        assert!(!validate_identifier("V1StGXR8_Z5jdHi6B-myT", Some("uuid".to_owned())).unwrap());
     }
 
     #[test]
@@ -226,8 +275,17 @@ mod tests {
         );
 
         assert_eq!(
-            format_uuid("018f2c0b-6c5b-7d2e-8f4a-123456789abc", "simple").unwrap(),
+            format_uuid("018f2c0b-6c5b-7d2e-8f4a-123456789abc", "simple", None).unwrap(),
             "018f2c0b6c5b7d2e8f4a123456789abc"
+        );
+        assert_eq!(
+            format_uuid(
+                "018f2c0b-6c5b-7d2e-8f4a-123456789abc",
+                "simple",
+                Some("upper".to_owned())
+            )
+            .unwrap(),
+            "018F2C0B6C5B7D2E8F4A123456789ABC"
         );
     }
 }
@@ -270,16 +328,19 @@ mod wasm_tests {
     #[wasm_bindgen_test]
     fn generation_decodes_javascript_options_and_defaults() {
         for options in [None, Some(JsValue::NULL), Some(JsValue::UNDEFINED)] {
-            assert_eq!(generate_uuid("v4", options).unwrap().len(), 36);
+            assert_eq!(generate_uuid("v4", options.clone()).unwrap().len(), 36);
+            assert_eq!(generate_uuid("v6", options.clone()).unwrap().len(), 36);
+            assert_eq!(generate_uuid("v7", options).unwrap().len(), 36);
         }
 
         let options = Object::new();
         set(&options, "namespace", &JsValue::from_str("dns"));
         set(&options, "name", &JsValue::from_str("example.org"));
         set(&options, "format", &JsValue::from_str("simple"));
+        set(&options, "case", &JsValue::from_str("upper"));
         assert_eq!(
             generate_uuid("v5", Some(options.into())).unwrap(),
-            "aad036818b63530489e08ca8f49461b5"
+            "AAD036818B63530489E08CA8F49461B5"
         );
     }
 
@@ -305,18 +366,27 @@ mod wasm_tests {
     #[wasm_bindgen_test]
     fn formatting_returns_structured_javascript_errors() {
         assert_error_code(
-            format_uuid("not-a-uuid", "canonical").unwrap_err(),
+            format_uuid("not-a-uuid", "canonical", None).unwrap_err(),
             "invalid_uuid",
         );
         assert_error_code(
-            format_uuid("018f2c0b-6c5b-7d2e-8f4a-123456789abc", "compact").unwrap_err(),
+            format_uuid("018f2c0b-6c5b-7d2e-8f4a-123456789abc", "compact", None).unwrap_err(),
             "unsupported_format",
+        );
+        assert_error_code(
+            format_uuid(
+                "018f2c0b-6c5b-7d2e-8f4a-123456789abc",
+                "canonical",
+                Some("mixed".to_owned()),
+            )
+            .unwrap_err(),
+            "unsupported_case",
         );
     }
 
     #[wasm_bindgen_test]
     fn uuid_inspection_serializes_to_a_plain_javascript_object() {
-        let inspection = inspect_uuid("018f2c0b-6c5b-7d2e-8f4a-123456789abc").unwrap();
+        let inspection = inspect_uuid("018f2c0b-6c5b-7d2e-8f4a-123456789abc", None).unwrap();
         assert_eq!(
             Reflect::get(&inspection, &JsValue::from_str("kind"))
                 .unwrap()
@@ -331,7 +401,29 @@ mod wasm_tests {
             Some(false)
         );
 
-        assert_error_code(inspect_uuid("not-a-uuid").unwrap_err(), "invalid_uuid");
+        let options = Object::new();
+        set(&options, "redactSensitive", &JsValue::TRUE);
+        let redacted =
+            inspect_uuid("11111111-1111-1111-9234-020000000001", Some(options.into())).unwrap();
+        let metadata = Reflect::get(&redacted, &JsValue::from_str("metadata")).unwrap();
+        assert!(
+            Reflect::get(&metadata, &JsValue::from_str("nodeId"))
+                .unwrap()
+                .is_null()
+        );
+
+        assert_error_code(
+            inspect_uuid("not-a-uuid", None).unwrap_err(),
+            "invalid_uuid",
+        );
+        assert_error_code(
+            inspect_uuid(
+                "018f2c0b-6c5b-7d2e-8f4a-123456789abc",
+                Some(JsValue::from_str("bad")),
+            )
+            .unwrap_err(),
+            "invalid_options",
+        );
     }
 
     #[cfg(feature = "ulid-inspect")]
@@ -355,7 +447,7 @@ mod wasm_tests {
             ("V1StGXR8_Z5jdHi6B-myT", "nanoid"),
             ("1724552287438348288", "snowflake"),
         ] {
-            let inspection = inspect_identifier(input).unwrap();
+            let inspection = inspect_identifier(input, None).unwrap();
             assert_eq!(
                 Reflect::get(&inspection, &JsValue::from_str("kind"))
                     .unwrap()
@@ -365,8 +457,18 @@ mod wasm_tests {
             );
         }
 
+        let forced = Object::new();
+        set(&forced, "type", &JsValue::from_str("uuid"));
         assert_error_code(
-            inspect_identifier("not-an-identifier").unwrap_err(),
+            inspect_identifier("V1StGXR8_Z5jdHi6B-myT", Some(forced.into())).unwrap_err(),
+            "invalid_identifier",
+        );
+        assert_error_code(
+            validate_identifier("V1StGXR8_Z5jdHi6B-myT", Some("objectid".to_owned())).unwrap_err(),
+            "unsupported_identifier_type",
+        );
+        assert_error_code(
+            inspect_identifier("not-an-identifier", None).unwrap_err(),
             "invalid_identifier",
         );
         assert_error_code(inspect_nanoid("bad").unwrap_err(), "invalid_nanoid");

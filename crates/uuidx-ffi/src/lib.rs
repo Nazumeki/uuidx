@@ -20,8 +20,10 @@ use std::{
 };
 
 use uuidx_core::{
-    GeneratableUuidVersion, GenerationOptions, NameHashAlgorithm, NodeKind, Uuid, UuidMetadata,
-    UuidOutputFormat, UuidVariant, format_uuid, generate_uuid, inspect_uuid, parse_uuid,
+    BitField, GeneratableUuidVersion, GenerationOptions, IdentifierFamily, IdentifierInspection,
+    NameHashAlgorithm, NodeKind, Uuid, UuidInspection, UuidMetadata, UuidOutputFormat,
+    UuidTextCase, UuidVariant, format_uuid_with_case, generate_uuid, inspect_identifier,
+    inspect_identifier_as, inspect_uuid, parse_namespace, parse_uuid,
 };
 
 /// ABI version implemented by this library.
@@ -49,6 +51,12 @@ pub const UUIDX_ERROR_GENERATION: i32 = 8;
 pub const UUIDX_ERROR_PANIC: i32 = 9;
 /// The library encountered an unexpected internal value.
 pub const UUIDX_ERROR_INTERNAL: i32 = 10;
+/// A UUID text-case selector was not supported.
+pub const UUIDX_ERROR_INVALID_CASE: i32 = 11;
+/// Identifier text could not be parsed for the requested or automatic family.
+pub const UUIDX_ERROR_INVALID_IDENTIFIER: i32 = 12;
+/// An identifier family selector was not supported or is disabled in this build.
+pub const UUIDX_ERROR_INVALID_IDENTIFIER_FAMILY: i32 = 13;
 
 /// Canonical hyphenated UUID output.
 pub const UUIDX_FORMAT_CANONICAL: i32 = 0;
@@ -58,6 +66,22 @@ pub const UUIDX_FORMAT_SIMPLE: i32 = 1;
 pub const UUIDX_FORMAT_URN: i32 = 2;
 /// Braced canonical UUID output.
 pub const UUIDX_FORMAT_BRACED: i32 = 3;
+
+/// Lowercase hexadecimal UUID digits.
+pub const UUIDX_CASE_LOWER: i32 = 0;
+/// Uppercase hexadecimal UUID digits.
+pub const UUIDX_CASE_UPPER: i32 = 1;
+
+/// Automatically detect the identifier family.
+pub const UUIDX_IDENTIFIER_AUTO: i32 = 0;
+/// UUID identifier family.
+pub const UUIDX_IDENTIFIER_UUID: i32 = 1;
+/// ULID identifier family.
+pub const UUIDX_IDENTIFIER_ULID: i32 = 2;
+/// Standard 21-character NanoID identifier family.
+pub const UUIDX_IDENTIFIER_NANOID: i32 = 3;
+/// Original Twitter Snowflake identifier family.
+pub const UUIDX_IDENTIFIER_SNOWFLAKE: i32 = 4;
 
 /// The RFC DNS namespace.
 pub const UUIDX_NAMESPACE_DNS: i32 = 1;
@@ -144,6 +168,20 @@ pub const UUIDX_FIELD_PAYLOAD_B: u8 = 17;
 pub const UUIDX_FIELD_PAYLOAD_C: u8 = 18;
 /// Whole UUID `value` bit field.
 pub const UUIDX_FIELD_VALUE: u8 = 19;
+/// ULID `timestamp_ms` bit field.
+pub const UUIDX_FIELD_TIMESTAMP_MS: u8 = 20;
+/// ULID `random` bit field.
+pub const UUIDX_FIELD_RANDOM: u8 = 21;
+/// Snowflake `sign` bit field.
+pub const UUIDX_FIELD_SIGN: u8 = 22;
+/// Snowflake `timestamp_delta_ms` bit field.
+pub const UUIDX_FIELD_TIMESTAMP_DELTA_MS: u8 = 23;
+/// Snowflake `datacenter_id` bit field.
+pub const UUIDX_FIELD_DATACENTER_ID: u8 = 24;
+/// Snowflake `worker_id` bit field.
+pub const UUIDX_FIELD_WORKER_ID: u8 = 25;
+/// Snowflake `sequence` bit field.
+pub const UUIDX_FIELD_SEQUENCE: u8 = 26;
 
 /// A UUID represented as 16 bytes in network byte order.
 #[repr(C)]
@@ -279,6 +317,79 @@ pub struct UuidxInspection {
     pub fields: [UuidxBitField; 7],
 }
 
+/// Fixed-size multi-family identifier inspection result.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct UuidxIdentifierInspection {
+    /// Detected or validated family (`UUIDX_IDENTIFIER_UUID`..`SNOWFLAKE`).
+    pub kind: u8,
+    /// One when `bytes` is populated (UUID and ULID), zero otherwise.
+    pub has_bytes: u8,
+    /// Length of `normalized` in bytes, excluding the NUL terminator.
+    pub normalized_length: u8,
+    /// Standard NanoID character count when `kind == UUIDX_IDENTIFIER_NANOID`.
+    pub nanoid_length: u8,
+    /// Standard NanoID entropy bits when `kind == UUIDX_IDENTIFIER_NANOID`.
+    pub nanoid_entropy_bits: u16,
+    /// Sequence number when `kind == UUIDX_IDENTIFIER_SNOWFLAKE`.
+    pub snowflake_sequence: u16,
+    /// Datacenter ID when `kind == UUIDX_IDENTIFIER_SNOWFLAKE`.
+    pub snowflake_datacenter_id: u8,
+    /// Worker ID when `kind == UUIDX_IDENTIFIER_SNOWFLAKE`.
+    pub snowflake_worker_id: u8,
+    /// Number of populated entries in `fields`.
+    pub field_count: u8,
+    /// Reserved; currently zero.
+    pub reserved: u8,
+    /// Canonical NUL-terminated identifier text.
+    pub normalized: [c_char; 40],
+    /// 16-byte binary representation for UUIDs and ULIDs.
+    pub bytes: [u8; 16],
+    /// Reserved alignment padding; currently zero.
+    pub reserved2: [u8; 4],
+    /// Unix timestamp in milliseconds for ULIDs and Snowflakes.
+    pub timestamp_ms: u64,
+    /// Snowflake epoch in Unix milliseconds when `kind == UUIDX_IDENTIFIER_SNOWFLAKE`.
+    pub snowflake_epoch_ms: u64,
+    /// Raw 64-bit Snowflake value when `kind == UUIDX_IDENTIFIER_SNOWFLAKE`.
+    pub snowflake_value: u64,
+    /// Most significant 16 bits of ULID randomness when `kind == UUIDX_IDENTIFIER_ULID`.
+    pub ulid_random_high: u64,
+    /// Least significant 64 bits of ULID randomness when `kind == UUIDX_IDENTIFIER_ULID`.
+    pub ulid_random_low: u64,
+    /// Full UUID inspection record when `kind == UUIDX_IDENTIFIER_UUID`.
+    pub uuid: UuidxInspection,
+    /// Decoded bit-field layout. Only the first `field_count` entries are populated.
+    pub fields: [UuidxBitField; 7],
+}
+
+impl Default for UuidxIdentifierInspection {
+    fn default() -> Self {
+        Self {
+            kind: 0,
+            has_bytes: 0,
+            normalized_length: 0,
+            nanoid_length: 0,
+            nanoid_entropy_bits: 0,
+            snowflake_sequence: 0,
+            snowflake_datacenter_id: 0,
+            snowflake_worker_id: 0,
+            field_count: 0,
+            reserved: 0,
+            normalized: [0; 40],
+            bytes: [0; 16],
+            reserved2: [0; 4],
+            timestamp_ms: 0,
+            snowflake_epoch_ms: 0,
+            snowflake_value: 0,
+            ulid_random_high: 0,
+            ulid_random_low: 0,
+            uuid: UuidxInspection::default(),
+            fields: [UuidxBitField::default(); 7],
+        }
+    }
+}
+
 /// Opaque error returned by fallible ABI calls.
 pub struct UuidxError {
     code: i32,
@@ -392,7 +503,41 @@ pub unsafe extern "C" fn uuidx_uuid_parse(
     })
 }
 
-/// Formats a UUID into a caller-owned NUL-terminated UTF-8 buffer.
+/// Parses an RFC namespace alias (`dns`, `url`, `oid`, `x500`) or explicit UUID text.
+///
+/// Returns null on success or an owned error that must be released with
+/// [`uuidx_error_free`].
+///
+/// # Safety
+///
+/// `input` must point to `input_length` readable bytes and `output` must point
+/// to writable storage for one [`UuidxUuid`]. All pointers must remain valid for
+/// the duration of the call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn uuidx_uuid_parse_namespace(
+    input: *const u8,
+    input_length: usize,
+    output: *mut UuidxUuid,
+) -> *mut UuidxError {
+    ffi_call(|| {
+        require_output(output, "output")?;
+        // SAFETY: The caller contract provides readable input bytes.
+        let input = unsafe { required_bytes(input, input_length, "input")? };
+        let input = str::from_utf8(input).map_err(|error| {
+            FfiError::new(
+                UUIDX_ERROR_INVALID_UTF8,
+                format!("input is not valid UTF-8: {error}"),
+            )
+        })?;
+        let uuid = parse_namespace(input)
+            .map_err(|error| FfiError::new(UUIDX_ERROR_INVALID_UUID, error.to_string()))?;
+        // SAFETY: `output` was validated above and is caller-owned writable storage.
+        unsafe { ptr::write(output, uuid.into()) };
+        Ok(())
+    })
+}
+
+/// Formats a UUID in lowercase into a caller-owned NUL-terminated UTF-8 buffer.
 ///
 /// `output_length` receives the required size including the NUL terminator.
 /// Passing a null `output` with a zero capacity performs a size query. Returns
@@ -411,11 +556,45 @@ pub unsafe extern "C" fn uuidx_uuid_format(
     output_capacity: usize,
     output_length: *mut usize,
 ) -> *mut UuidxError {
+    // SAFETY: Forwarded directly with the default lowercase selector.
+    unsafe {
+        uuidx_uuid_format_with_case(
+            uuid,
+            format,
+            UUIDX_CASE_LOWER,
+            output,
+            output_capacity,
+            output_length,
+        )
+    }
+}
+
+/// Formats a UUID with explicit digit letter case into a caller-owned NUL-terminated UTF-8 buffer.
+///
+/// `output_length` receives the required size including the NUL terminator.
+/// Passing a null `output` with a zero capacity performs a size query. Returns
+/// null on success or an owned error that must be released.
+///
+/// # Safety
+///
+/// `uuid` and `output_length` must point to readable/writable values. When
+/// `output` is non-null, it must point to `output_capacity` writable bytes.
+/// Pointers must remain valid for the duration of the call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn uuidx_uuid_format_with_case(
+    uuid: *const UuidxUuid,
+    format: i32,
+    text_case: i32,
+    output: *mut c_char,
+    output_capacity: usize,
+    output_length: *mut usize,
+) -> *mut UuidxError {
     ffi_call(|| {
         let uuid = read_uuid(uuid)?;
         require_output(output_length, "output_length")?;
         let format = parse_format(format)?;
-        let formatted = format_uuid(&uuid, format);
+        let text_case = parse_case(text_case)?;
+        let formatted = format_uuid_with_case(&uuid, format, text_case);
         let required = formatted
             .len()
             .checked_add(1)
@@ -536,7 +715,52 @@ pub unsafe extern "C" fn uuidx_uuid_inspect(
     ffi_call(|| {
         let uuid = read_uuid(uuid)?;
         require_output(output, "output")?;
-        let inspection = inspection_from_core(&uuid)?;
+        let inspection = inspection_from_core(&inspect_uuid(&uuid))?;
+        // SAFETY: `output` was validated above and is caller-owned writable storage.
+        unsafe { ptr::write(output, inspection) };
+        Ok(())
+    })
+}
+
+/// Inspects UTF-8 identifier text automatically or for a specific identifier family.
+///
+/// Pass [`UUIDX_IDENTIFIER_AUTO`] to detect the identifier family automatically,
+/// or one of [`UUIDX_IDENTIFIER_UUID`], [`UUIDX_IDENTIFIER_ULID`],
+/// [`UUIDX_IDENTIFIER_NANOID`], or [`UUIDX_IDENTIFIER_SNOWFLAKE`] to force one family.
+/// Returns null on success or an owned error that must be released with
+/// [`uuidx_error_free`].
+///
+/// # Safety
+///
+/// `input` must point to `input_length` readable bytes and `output` must point
+/// to writable storage for one [`UuidxIdentifierInspection`]. All pointers must
+/// remain valid for the duration of the call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn uuidx_identifier_inspect(
+    input: *const u8,
+    input_length: usize,
+    family: i32,
+    output: *mut UuidxIdentifierInspection,
+) -> *mut UuidxError {
+    ffi_call(|| {
+        require_output(output, "output")?;
+        // SAFETY: The caller contract provides readable input bytes.
+        let input = unsafe { required_bytes(input, input_length, "input")? };
+        let input = str::from_utf8(input).map_err(|error| {
+            FfiError::new(
+                UUIDX_ERROR_INVALID_UTF8,
+                format!("input is not valid UTF-8: {error}"),
+            )
+        })?;
+        let core_inspection = match parse_identifier_family(family)? {
+            None => inspect_identifier(input).map_err(|error| {
+                FfiError::new(UUIDX_ERROR_INVALID_IDENTIFIER, error.to_string())
+            })?,
+            Some(core_family) => inspect_identifier_as(input, core_family).map_err(|error| {
+                FfiError::new(UUIDX_ERROR_INVALID_IDENTIFIER, error.to_string())
+            })?,
+        };
+        let inspection = identifier_inspection_from_core(&core_inspection)?;
         // SAFETY: `output` was validated above and is caller-owned writable storage.
         unsafe { ptr::write(output, inspection) };
         Ok(())
@@ -629,6 +853,37 @@ fn parse_format(format: i32) -> FfiResult<UuidOutputFormat> {
     }
 }
 
+fn parse_case(text_case: i32) -> FfiResult<UuidTextCase> {
+    match text_case {
+        UUIDX_CASE_LOWER => Ok(UuidTextCase::Lower),
+        UUIDX_CASE_UPPER => Ok(UuidTextCase::Upper),
+        value => Err(FfiError::new(
+            UUIDX_ERROR_INVALID_CASE,
+            format!("unsupported UUID text case {value}"),
+        )),
+    }
+}
+
+fn parse_identifier_family(family: i32) -> FfiResult<Option<IdentifierFamily>> {
+    match family {
+        UUIDX_IDENTIFIER_AUTO => Ok(None),
+        UUIDX_IDENTIFIER_UUID => Ok(Some(IdentifierFamily::Uuid)),
+        #[cfg(feature = "ulid-inspect")]
+        UUIDX_IDENTIFIER_ULID => Ok(Some(IdentifierFamily::Ulid)),
+        #[cfg(not(feature = "ulid-inspect"))]
+        UUIDX_IDENTIFIER_ULID => Err(FfiError::new(
+            UUIDX_ERROR_INVALID_IDENTIFIER_FAMILY,
+            "ULID inspection is disabled in this build",
+        )),
+        UUIDX_IDENTIFIER_NANOID => Ok(Some(IdentifierFamily::Nanoid)),
+        UUIDX_IDENTIFIER_SNOWFLAKE => Ok(Some(IdentifierFamily::Snowflake)),
+        value => Err(FfiError::new(
+            UUIDX_ERROR_INVALID_IDENTIFIER_FAMILY,
+            format!("unsupported identifier family {value}"),
+        )),
+    }
+}
+
 fn parse_version(version: i32) -> FfiResult<GeneratableUuidVersion> {
     match version {
         3 => Ok(GeneratableUuidVersion::V3),
@@ -711,37 +966,47 @@ unsafe fn generation_options(input: UuidxGenerationOptions) -> FfiResult<Generat
     Ok(output)
 }
 
-fn inspection_from_core(uuid: &Uuid) -> FfiResult<UuidxInspection> {
-    let source = inspect_uuid(uuid);
-    let mut output =
-        UuidxInspection {
-            version: source.version.number().ok_or_else(|| {
-                FfiError::new(UUIDX_ERROR_INTERNAL, "inspection returned no UUID version")
-            })?,
-            variant: variant_value(source.variant),
-            is_nil: u8::from(source.is_nil),
-            is_max: u8::from(source.is_max),
-            field_count: source.fields.len().try_into().map_err(|_| {
-                FfiError::new(UUIDX_ERROR_INTERNAL, "too many UUID inspection fields")
-            })?,
-            ..UuidxInspection::default()
-        };
-
-    if source.fields.len() > output.fields.len() {
+fn populate_fields(source: &[BitField], target: &mut [UuidxBitField; 7]) -> FfiResult<u8> {
+    if source.len() > target.len() {
         return Err(FfiError::new(
             UUIDX_ERROR_INTERNAL,
-            "too many UUID inspection fields",
+            "too many inspection fields",
         ));
     }
-    for (target, field) in output.fields.iter_mut().zip(&source.fields) {
-        target.name = field_name(&field.name)?;
-        target.offset = field.offset;
-        target.width = field.width;
-        target.value_high = (field.value >> 64) as u64;
-        target.value_low = field.value as u64;
+    for (slot, field) in target.iter_mut().zip(source) {
+        slot.name = field_name(&field.name)?;
+        slot.offset = field.offset;
+        slot.width = field.width;
+        slot.value_high = (field.value >> 64) as u64;
+        slot.value_low = field.value as u64;
     }
+    Ok(source.len() as u8)
+}
 
-    match source.metadata {
+fn write_normalized(text: &str, target: &mut [c_char; 40]) -> FfiResult<u8> {
+    if text.len() >= target.len() {
+        return Err(FfiError::new(
+            UUIDX_ERROR_INTERNAL,
+            "normalized identifier exceeds buffer",
+        ));
+    }
+    for (slot, &byte) in target.iter_mut().zip(text.as_bytes()) {
+        *slot = byte as c_char;
+    }
+    Ok(text.len() as u8)
+}
+
+fn inspection_from_core(source: &UuidInspection) -> FfiResult<UuidxInspection> {
+    let mut output = UuidxInspection {
+        version: source.version.number(),
+        variant: variant_value(source.variant),
+        is_nil: u8::from(source.is_nil),
+        is_max: u8::from(source.is_max),
+        ..UuidxInspection::default()
+    };
+    output.field_count = populate_fields(&source.fields, &mut output.fields)?;
+
+    match &source.metadata {
         UuidMetadata::None => {}
         UuidMetadata::Random => output.metadata_kind = UUIDX_METADATA_RANDOM,
         UuidMetadata::NameBased { algorithm } => {
@@ -762,11 +1027,11 @@ fn inspection_from_core(uuid: &Uuid) -> FfiResult<UuidxInspection> {
             output.unix_seconds = timestamp.unix_seconds;
             output.unix_millis = timestamp.unix_millis;
             output.subsec_nanos = timestamp.subsec_nanos;
-            if let Some(clock_sequence) = clock_sequence {
+            if let Some(clock_sequence) = *clock_sequence {
                 output.has_clock_sequence = 1;
                 output.clock_sequence = clock_sequence;
             }
-            if let Some(node_id) = node_id {
+            if let Some(node_id) = *node_id {
                 output.has_node = 1;
                 output.node_id = node_id;
             }
@@ -778,9 +1043,53 @@ fn inspection_from_core(uuid: &Uuid) -> FfiResult<UuidxInspection> {
         }
         UuidMetadata::Custom { bytes } => {
             output.metadata_kind = UUIDX_METADATA_CUSTOM;
-            output.custom = bytes;
+            output.custom = *bytes;
         }
         UuidMetadata::DceSecurity => output.metadata_kind = UUIDX_METADATA_DCE_SECURITY,
+    }
+    Ok(output)
+}
+
+fn identifier_inspection_from_core(
+    source: &IdentifierInspection,
+) -> FfiResult<UuidxIdentifierInspection> {
+    let mut output = UuidxIdentifierInspection::default();
+    output.normalized_length = write_normalized(source.normalized(), &mut output.normalized)?;
+
+    match source {
+        IdentifierInspection::Uuid(inspection) => {
+            output.kind = UUIDX_IDENTIFIER_UUID as u8;
+            output.has_bytes = 1;
+            output.bytes = inspection.bytes;
+            output.uuid = inspection_from_core(inspection)?;
+            output.field_count = output.uuid.field_count;
+            output.fields = output.uuid.fields;
+        }
+        #[cfg(feature = "ulid-inspect")]
+        IdentifierInspection::Ulid(inspection) => {
+            output.kind = UUIDX_IDENTIFIER_ULID as u8;
+            output.has_bytes = 1;
+            output.bytes = inspection.bytes;
+            output.timestamp_ms = inspection.timestamp_ms;
+            output.ulid_random_high = (inspection.random >> 64) as u64;
+            output.ulid_random_low = inspection.random as u64;
+            output.field_count = populate_fields(&inspection.fields, &mut output.fields)?;
+        }
+        IdentifierInspection::Nanoid(inspection) => {
+            output.kind = UUIDX_IDENTIFIER_NANOID as u8;
+            output.nanoid_length = inspection.length as u8;
+            output.nanoid_entropy_bits = inspection.entropy_bits;
+        }
+        IdentifierInspection::Snowflake(inspection) => {
+            output.kind = UUIDX_IDENTIFIER_SNOWFLAKE as u8;
+            output.timestamp_ms = inspection.timestamp_ms;
+            output.snowflake_epoch_ms = inspection.epoch_ms;
+            output.snowflake_value = inspection.value;
+            output.snowflake_datacenter_id = inspection.datacenter_id;
+            output.snowflake_worker_id = inspection.worker_id;
+            output.snowflake_sequence = inspection.sequence;
+            output.field_count = populate_fields(&inspection.fields, &mut output.fields)?;
+        }
     }
     Ok(output)
 }
@@ -815,6 +1124,13 @@ fn field_name(name: &str) -> FfiResult<u8> {
         "payload_b" => Ok(UUIDX_FIELD_PAYLOAD_B),
         "payload_c" => Ok(UUIDX_FIELD_PAYLOAD_C),
         "value" => Ok(UUIDX_FIELD_VALUE),
+        "timestamp_ms" => Ok(UUIDX_FIELD_TIMESTAMP_MS),
+        "random" => Ok(UUIDX_FIELD_RANDOM),
+        "sign" => Ok(UUIDX_FIELD_SIGN),
+        "timestamp_delta_ms" => Ok(UUIDX_FIELD_TIMESTAMP_DELTA_MS),
+        "datacenter_id" => Ok(UUIDX_FIELD_DATACENTER_ID),
+        "worker_id" => Ok(UUIDX_FIELD_WORKER_ID),
+        "sequence" => Ok(UUIDX_FIELD_SEQUENCE),
         other => Err(FfiError::new(
             UUIDX_ERROR_INTERNAL,
             format!("unknown inspection field {other}"),
@@ -861,5 +1177,98 @@ mod tests {
         let error = field_name("not-a-core-field").unwrap_err();
         assert_eq!(error.code, UUIDX_ERROR_INTERNAL);
         assert_eq!(error.message, "unknown inspection field not-a-core-field");
+
+        let mut target = [UuidxBitField::default(); 7];
+        let oversized = vec![
+            BitField {
+                name: "value".to_owned(),
+                offset: 0,
+                width: 1,
+                value: 0,
+            };
+            8
+        ];
+        assert_eq!(
+            populate_fields(&oversized, &mut target).unwrap_err().code,
+            UUIDX_ERROR_INTERNAL
+        );
+
+        let mut normalized = [0 as c_char; 40];
+        assert_eq!(
+            write_normalized(&"a".repeat(40), &mut normalized)
+                .unwrap_err()
+                .code,
+            UUIDX_ERROR_INTERNAL
+        );
+    }
+
+    #[test]
+    fn exported_entry_points_execute_in_unit_test_binary() {
+        assert_eq!(uuidx_abi_version(), UUIDX_ABI_VERSION);
+
+        // SAFETY: All pointers below reference stack locals with exact lengths.
+        unsafe {
+            assert_eq!(uuidx_error_code(ptr::null()), UUIDX_ERROR_NULL_POINTER);
+            assert!(CStr::from_ptr(uuidx_error_message(ptr::null())).is_empty());
+            uuidx_error_free(ptr::null_mut());
+
+            let mut uuid = UuidxUuid { bytes: [0; 16] };
+            assert!(
+                uuidx_uuid_parse(
+                    b"018f2c0b-6c5b-7d2e-8f4a-123456789abc".as_ptr(),
+                    36,
+                    &mut uuid,
+                )
+                .is_null()
+            );
+
+            let mut ns = UuidxUuid { bytes: [0; 16] };
+            assert!(uuidx_uuid_parse_namespace(b"dns".as_ptr(), 3, &mut ns).is_null());
+            assert!(uuidx_uuid_namespace(UUIDX_NAMESPACE_DNS, &mut ns).is_null());
+
+            let mut buf = [0 as c_char; 48];
+            let mut required = 0usize;
+            assert!(
+                uuidx_uuid_format(
+                    &uuid,
+                    UUIDX_FORMAT_SIMPLE,
+                    buf.as_mut_ptr(),
+                    buf.len(),
+                    &mut required,
+                )
+                .is_null()
+            );
+            assert!(
+                uuidx_uuid_format_with_case(
+                    &uuid,
+                    UUIDX_FORMAT_SIMPLE,
+                    UUIDX_CASE_UPPER,
+                    buf.as_mut_ptr(),
+                    buf.len(),
+                    &mut required,
+                )
+                .is_null()
+            );
+
+            let options = UuidxGenerationOptions {
+                version: 7,
+                ..UuidxGenerationOptions::default()
+            };
+            assert!(uuidx_uuid_generate(&options, &mut uuid).is_null());
+
+            let mut uuid_inspection = UuidxInspection::default();
+            assert!(uuidx_uuid_inspect(&uuid, &mut uuid_inspection).is_null());
+
+            let mut id_inspection = UuidxIdentifierInspection::default();
+            assert!(
+                uuidx_identifier_inspect(
+                    b"V1StGXR8_Z5jdHi6B-myT".as_ptr(),
+                    21,
+                    UUIDX_IDENTIFIER_AUTO,
+                    &mut id_inspection,
+                )
+                .is_null()
+            );
+        }
     }
 }

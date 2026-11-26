@@ -83,7 +83,7 @@ pub enum Command {
     /// Inspect UUID, ULID, NanoID, and Snowflake values.
     #[command(visible_alias = "i")]
     Inspect(InspectArgs),
-    /// Validate UUID syntax and version structure.
+    /// Validate UUID, ULID, NanoID, and Snowflake values.
     #[command(visible_alias = "v")]
     Validate(ValidateArgs),
     /// Convert UUID text between standard textual formats.

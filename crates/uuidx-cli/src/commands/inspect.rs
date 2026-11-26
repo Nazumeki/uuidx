@@ -92,7 +92,12 @@ mod tests {
     fn run_marks_invalid_records_as_data_errors() {
         let args = InspectArgs {
             input: InputArgs {
-                values: vec![UUID.to_owned(), "not-an-identifier".to_owned()],
+                values: vec![
+                    UUID.to_owned(),
+                    "V1StGXR8_Z5jdHi6B-myT".to_owned(),
+                    "1724552287438348288".to_owned(),
+                    "not-an-identifier".to_owned(),
+                ],
                 input: None,
                 fail_fast: false,
             },
@@ -108,6 +113,33 @@ mod tests {
             Vec::new(),
         );
         assert!(run(&args, &mut output).unwrap());
+
+        let forced = InspectArgs {
+            input: InputArgs {
+                values: vec!["V1StGXR8_Z5jdHi6B-myT".to_owned()],
+                input: None,
+                fail_fast: false,
+            },
+            kind: Some(crate::cli::IdentifierTypeArg::Nanoid),
+            layout: false,
+            redact_sensitive: false,
+        };
+        assert!(!run(&forced, &mut output).unwrap());
+
+        #[cfg(feature = "ulid-inspect")]
+        {
+            let ulid_ok = InspectArgs {
+                input: InputArgs {
+                    values: vec!["01ARZ3NDEKTSV4RRFFQ69G5FAV".to_owned()],
+                    input: None,
+                    fail_fast: false,
+                },
+                kind: Some(crate::cli::IdentifierTypeArg::Ulid),
+                layout: false,
+                redact_sensitive: false,
+            };
+            assert!(!run(&ulid_ok, &mut output).unwrap());
+        }
     }
 
     #[test]

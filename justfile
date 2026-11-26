@@ -1,3 +1,5 @@
+export WASM_BINDGEN_BENCH_RESULT := "target/wbg_benchmark.json"
+
 default: check
 
 fmt:
@@ -22,11 +24,14 @@ test-wasm:
     cargo test -p uuidx-wasm --all-features
 
 test-wasm-target:
-    WASM_BINDGEN_BENCH_RESULT=target/wbg_benchmark.json cargo test --locked -p uuidx-wasm --target wasm32-unknown-unknown --all-features
-    WASM_BINDGEN_BENCH_RESULT=target/wbg_benchmark.json cargo test --locked -p uuidx-wasm --target wasm32-unknown-unknown --no-default-features
+    cargo test --locked -p uuidx-wasm --target wasm32-unknown-unknown --all-features
+    cargo test --locked -p uuidx-wasm --target wasm32-unknown-unknown --no-default-features
 
 test-ffi:
     cargo test -p uuidx-ffi --all-features
+
+test-ffi-min:
+    cargo test -p uuidx-ffi --no-default-features
 
 test-all: test test-min
 
@@ -51,6 +56,9 @@ build-wasm-min:
 build-ffi:
     cargo build --release -p uuidx-ffi --all-features
 
+build-ffi-min:
+    cargo build --release -p uuidx-ffi --no-default-features
+
 doc:
     cargo doc --workspace --all-features --no-deps
 
@@ -71,9 +79,9 @@ smoke:
     cargo run --quiet -p uuidx-cli --all-features -- inspect 018f2c0b-6c5b-7d2e-8f4a-123456789abc --output json
 
 # Requires cargo-fuzz (`cargo install cargo-fuzz`) and a nightly toolchain.
-fuzz:
-    cargo fuzz run parse_uuid
+fuzz target="parse_uuid":
+    cargo fuzz run {{target}}
 
 check: fmt-check test-all lint lint-min
 
-ci: check test-wasm-target build build-min build-wasm build-wasm-min build-ffi
+ci: check test-wasm-target build build-min build-wasm build-wasm-min build-ffi build-ffi-min

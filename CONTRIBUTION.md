@@ -68,7 +68,7 @@ before running the full local CI recipe:
 
 ```console
 rustup target add wasm32-unknown-unknown
-cargo install wasm-bindgen-cli --version 0.2.127 --locked
+cargo install wasm-bindgen-cli --version 0.2.129 --locked
 ```
 
 The workspace contains:
@@ -125,11 +125,11 @@ hard to validate.
 | --- | --- |
 | `types.rs` | Public UUID types, version enums, options, and variants. |
 | `error.rs` | Public domain errors for parsing, payloads, and generation options. |
-| `parse.rs` | UUID text parsing. |
-| `format.rs` | UUID output formats and fixed-size hexadecimal payload parsing. |
-| `generate/` | Version-specific v3-v8 generation. |
+| `parse.rs` | UUID text and RFC namespace alias parsing. |
+| `format.rs` | UUID output formats, text case, and fixed-size hexadecimal payload parsing. |
+| `generate/` | Version-specific v3-v8 generation (including monotonic v7 state). |
 | `inspect/` | Version classification, variants, metadata, and bit layouts. |
-| `inspect/identifier.rs` | Automatic identifier-family recognition. |
+| `inspect/identifier.rs` | Automatic and forced identifier-family recognition. |
 | `inspect/nanoid.rs` | Standard 21-character NanoID inspection. |
 | `inspect/snowflake.rs` | Original Twitter Snowflake inspection. |
 | `inspect/ulid.rs` | Optional read-only ULID inspection. |
@@ -232,7 +232,8 @@ The root `justfile` is the canonical test and verification interface.
 | `just build-min` | Release CLI build without default features. |
 | `just build-wasm` | `uuidx-wasm` build for `wasm32-unknown-unknown`. |
 | `just build-wasm-min` | Target build without default features. |
-| `just build-ffi` | Release C ABI library build. |
+| `just build-ffi` | Release C ABI library build with all features. |
+| `just build-ffi-min` | Release C ABI library build without default features. |
 | `just doc` | Workspace API documentation without dependency docs. |
 | `just smoke` | Representative generation and JSON inspection commands. |
 | `just check` | Formatting, tests, and both lint matrices. |

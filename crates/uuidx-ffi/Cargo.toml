@@ -11,5 +11,9 @@ repository.workspace = true
 [lib]
 crate-type = ["cdylib", "staticlib", "rlib"]
 
+[features]
+default = ["ulid-inspect"]
+ulid-inspect = ["uuidx-core/ulid-inspect"]
+
 [dependencies]
 uuidx-core.workspace = true

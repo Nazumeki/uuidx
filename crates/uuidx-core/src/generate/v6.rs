@@ -1,8 +1,16 @@
+use super::{AllowedOptions, reject_unexpected};
 use crate::{GenerateError, GenerationOptions, Uuid};
 use uuid::Uuid as ExternalUuid;
 
 pub(super) fn generate(options: &GenerationOptions) -> Result<Uuid, GenerateError> {
-    reject_unused(options)?;
+    reject_unexpected(
+        options,
+        AllowedOptions {
+            node: true,
+            timestamp: true,
+            ..AllowedOptions::default()
+        },
+    )?;
     let node = options.node.unwrap_or_else(random_node);
 
     match options.timestamp {
@@ -24,26 +32,4 @@ pub(crate) fn random_node() -> [u8; 6] {
     node.copy_from_slice(&random.as_bytes()[..6]);
     node[0] |= 0x01;
     node
-}
-
-fn reject_unused(options: &GenerationOptions) -> Result<(), GenerateError> {
-    if options.namespace.is_some() {
-        return Err(GenerateError::UnexpectedOption {
-            version: options.version,
-            option: "--namespace",
-        });
-    }
-    if options.name.is_some() {
-        return Err(GenerateError::UnexpectedOption {
-            version: options.version,
-            option: "--name",
-        });
-    }
-    if options.custom.is_some() {
-        return Err(GenerateError::UnexpectedOption {
-            version: options.version,
-            option: "--custom",
-        });
-    }
-    Ok(())
 }

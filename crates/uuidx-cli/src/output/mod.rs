@@ -10,7 +10,10 @@ use anstream::{
     stream::{AsLockedWrite, RawStream},
 };
 use serde::Serialize;
-use uuidx_core::{IdentifierInspection, Uuid, UuidInspection, UuidOutputFormat, UuidTextCase};
+use uuidx_core::{
+    GeneratableUuidVersion, IdentifierInspection, InspectableUuidVersion, Uuid, UuidInspection,
+    UuidOutputFormat, UuidTextCase,
+};
 
 use crate::{
     cli::{GlobalOptions, OutputModeArg},
@@ -19,11 +22,50 @@ use crate::{
 
 pub use mode::RenderMode;
 
+const WARN_V1_METADATA: &str = "UUID v1 exposes timestamp and node metadata";
+const WARN_V2_DCE: &str = "UUID v2 DCE Security semantics are outside RFC 9562";
+const WARN_V3_MD5: &str = "UUID v3 uses legacy MD5 name hashing";
+const WARN_V5_SHA1: &str = "UUID v5 uses legacy SHA-1 name hashing";
+const WARN_V8_CUSTOM: &str = "UUID v8 uniqueness is application-defined";
+
+pub(crate) const fn generation_warnings(
+    version: GeneratableUuidVersion,
+) -> &'static [&'static str] {
+    match version {
+        GeneratableUuidVersion::V3 => &[WARN_V3_MD5],
+        GeneratableUuidVersion::V5 => &[WARN_V5_SHA1],
+        GeneratableUuidVersion::V8 => &[WARN_V8_CUSTOM],
+        GeneratableUuidVersion::V4 | GeneratableUuidVersion::V6 | GeneratableUuidVersion::V7 => &[],
+    }
+}
+
+pub(crate) const fn inspection_warnings(
+    version: InspectableUuidVersion,
+) -> &'static [&'static str] {
+    match version {
+        InspectableUuidVersion::V1 => &[WARN_V1_METADATA],
+        InspectableUuidVersion::V2 => &[WARN_V2_DCE],
+        InspectableUuidVersion::V3 => &[WARN_V3_MD5],
+        InspectableUuidVersion::V5 => &[WARN_V5_SHA1],
+        _ => &[],
+    }
+}
+
+pub(crate) const fn conversion_warnings(
+    version: InspectableUuidVersion,
+) -> &'static [&'static str] {
+    match version {
+        InspectableUuidVersion::V3 => &[WARN_V3_MD5],
+        InspectableUuidVersion::V5 => &[WARN_V5_SHA1],
+        _ => &[],
+    }
+}
+
 pub(crate) trait OutputWriter: RawStream + AsLockedWrite {}
 
 impl<T> OutputWriter for T where T: RawStream + AsLockedWrite {}
 
-pub struct Output<WOut = io::Stdout, WErr = io::Stderr>
+pub struct Output<WOut = io::StdoutLock<'static>, WErr = io::StderrLock<'static>>
 where
     WOut: OutputWriter,
     WErr: OutputWriter,
@@ -33,9 +75,9 @@ where
     stderr: AutoStream<WErr>,
 }
 
-impl Output<io::Stdout, io::Stderr> {
+impl Output<io::StdoutLock<'static>, io::StderrLock<'static>> {
     pub fn new(options: &GlobalOptions) -> Self {
-        Self::with_writers(options, io::stdout(), io::stderr())
+        Self::with_writers(options, io::stdout().lock(), io::stderr().lock())
     }
 }
 
@@ -61,11 +103,11 @@ where
         version: &str,
         format: UuidOutputFormat,
         case: UuidTextCase,
-        warnings: &[String],
+        warnings: &[&str],
     ) -> Result<(), CliError> {
         let value = uuidx_core::format_uuid_with_case(uuid, format, case);
         match self.mode {
-            RenderMode::Plain => self.write_stdout(&plain::value(&value)),
+            RenderMode::Plain => self.write_stdout(&value),
             RenderMode::Pretty => {
                 self.write_stdout(&pretty::generated(index, &value, version, warnings))
             }
@@ -84,7 +126,7 @@ where
         show_layout: bool,
     ) -> Result<(), CliError> {
         match self.mode {
-            RenderMode::Plain => self.write_stdout(&plain::value(&inspection.normalized)),
+            RenderMode::Plain => self.write_stdout(&inspection.normalized),
             RenderMode::Pretty => self.write_stdout(&pretty::inspection(
                 index,
                 input,
@@ -110,7 +152,7 @@ where
         show_layout: bool,
     ) -> Result<(), CliError> {
         match self.mode {
-            RenderMode::Plain => self.write_stdout(&plain::value(&inspection.normalized)),
+            RenderMode::Plain => self.write_stdout(&inspection.normalized),
             RenderMode::Pretty => self.write_stdout(&pretty::ulid_inspection(
                 index,
                 input,
@@ -131,7 +173,7 @@ where
         show_layout: bool,
     ) -> Result<(), CliError> {
         match self.mode {
-            RenderMode::Plain => self.write_stdout(&plain::value(&inspection.normalized)),
+            RenderMode::Plain => self.write_stdout(&inspection.normalized),
             RenderMode::Pretty => self.write_stdout(&pretty::nanoid_inspection(
                 index,
                 input,
@@ -152,7 +194,7 @@ where
         show_layout: bool,
     ) -> Result<(), CliError> {
         match self.mode {
-            RenderMode::Plain => self.write_stdout(&plain::value(&inspection.normalized)),
+            RenderMode::Plain => self.write_stdout(&inspection.normalized),
             RenderMode::Pretty => self.write_stdout(&pretty::snowflake_inspection(
                 index,
                 input,
@@ -174,9 +216,16 @@ where
         format: UuidOutputFormat,
     ) -> Result<(), CliError> {
         match self.mode {
-            RenderMode::Plain => self.write_stdout(&plain::value(value)),
+            RenderMode::Plain => self.write_stdout(value),
             RenderMode::Pretty => {
-                self.write_stdout(&pretty::converted(index, input, value, format))
+                let version = InspectableUuidVersion::from_uuid(uuid);
+                self.write_stdout(&pretty::converted(
+                    index,
+                    input,
+                    value,
+                    format,
+                    conversion_warnings(version),
+                ))
             }
             RenderMode::Json => self.write_json(&json::JsonRecord::converted(
                 index, input, uuid, value, format,
@@ -358,7 +407,7 @@ mod tests {
     fn render_methods_support_each_output_mode() {
         let uuid = parse_uuid("018f2c0b-6c5b-7d2e-8f4a-123456789abc").unwrap();
         let inspection = inspect_uuid(&uuid);
-        let warnings = vec!["test warning".to_owned()];
+        let warnings = ["test warning"];
 
         for mode in [
             OutputModeArg::Plain,

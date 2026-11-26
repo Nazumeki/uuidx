@@ -115,7 +115,7 @@ uuidx [OPTIONS] <COMMAND>
 | ---------- | ----- | ------------------------------------------------- |
 | `generate` | `g`   | Generate UUID v3-v8 values.                       |
 | `inspect`  | `i`   | Inspect UUIDs and supported identifier families.  |
-| `validate` | `v`   | Validate UUID syntax in batches.                  |
+| `validate` | `v`   | Validate UUIDs and supported identifier families. |
 | `convert`  | `c`   | Convert canonical, simple, URN, and braced forms. |
 
 Global output modes are `auto`, `pretty`, `plain`, and `json`. Use
@@ -149,9 +149,11 @@ Enable `ulid-inspect` when a Rust application needs read-only ULID inspection.
 
 ### WebAssembly
 
-`uuidx-wasm` exports `generateUuid`, `validateUuid`, `formatUuid`,
-`inspectUuid`, `inspectIdentifier`, `inspectUlid`, `inspectNanoid`, and
-`inspectSnowflake` through `wasm-bindgen`. Build the supported target with:
+`uuidx-wasm` exports `generateUuid`, `validateUuid`, `validateIdentifier`,
+`formatUuid`, `inspectUuid`, `inspectIdentifier`, `inspectUlid`,
+`inspectNanoid`, and `inspectSnowflake` through `wasm-bindgen`, supporting UUID
+text case, forced identifier-family selection, and sensitive node redaction.
+Build the supported target with:
 
 ```console
 rustup target add wasm32-unknown-unknown
@@ -160,7 +162,9 @@ just build-wasm
 
 ### C ABI
 
-`uuidx-ffi` builds static and dynamic libraries and publishes its header at
+`uuidx-ffi` builds static and dynamic libraries for UUID parsing, namespace
+resolution, lowercase/uppercase formatting, generation, and multi-family
+identifier inspection, and publishes its header at
 [`crates/uuidx-ffi/include/uuidx.h`](crates/uuidx-ffi/include/uuidx.h):
 
 ```console

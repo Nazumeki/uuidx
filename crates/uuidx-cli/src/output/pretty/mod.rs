@@ -3,11 +3,10 @@ mod theme;
 
 use uuidx_core::{IdentifierInspection, UuidInspection, UuidOutputFormat};
 
-use self::theme::{error, heading, label, success, version_tag, warning};
+use self::theme::{dim, error, heading, label, success, version_tag, warning};
+use super::inspection_warnings;
 
-use self::theme::dim;
-
-pub fn generated(index: u64, value: &str, version: &str, warnings: &[String]) -> String {
+pub fn generated(index: u64, value: &str, version: &str, warnings: &[&str]) -> String {
     let mut output = format!(
         "{}\n{} {} {}",
         heading("Generated UUID"),
@@ -15,9 +14,7 @@ pub fn generated(index: u64, value: &str, version: &str, warnings: &[String]) ->
         version_tag(version),
         success(value),
     );
-    for message in warnings {
-        output.push_str(&format!("\n{} {}", warning("warning"), message));
-    }
+    append_warnings(&mut output, warnings);
     output
 }
 
@@ -40,9 +37,7 @@ pub fn inspection(
         ));
         output.push_str(&format!("\n{}", sections::layout(&inspection.fields)));
     }
-    if let Some(warning_text) = inspection_warning(inspection) {
-        output.push_str(&format!("\n{} {}", warning("warning"), warning_text));
-    }
+    append_warnings(&mut output, inspection_warnings(inspection.version));
     output
 }
 
@@ -141,22 +136,31 @@ pub fn snowflake_inspection(
     output
 }
 
-pub fn converted(index: u64, input: &str, value: &str, format: UuidOutputFormat) -> String {
-    format!(
+pub fn converted(
+    index: u64,
+    input: &str,
+    value: &str,
+    format: UuidOutputFormat,
+    warnings: &[&str],
+) -> String {
+    let mut output = format!(
         "{}\n{} {}\n{} {}",
         heading(&format!("Converted UUID #{index}")),
         label("input"),
         input,
         label(&format.to_string()),
         success(value),
-    )
+    );
+    append_warnings(&mut output, warnings);
+    output
 }
 
 pub fn validated(index: u64, input: &str, inspection: &IdentifierInspection) -> String {
     format!(
-        "{} {} {}\n{} {}",
+        "{} {} {} {}\n{} {}",
         success("[ok]"),
         label(&format!("#{index}")),
+        version_tag(inspection.kind()),
         input,
         label("normalized"),
         inspection.normalized(),
@@ -171,17 +175,9 @@ pub fn top_level_error(message: &str) -> String {
     format!("{} {}", error("error:"), message)
 }
 
-fn inspection_warning(inspection: &UuidInspection) -> Option<&'static str> {
-    match inspection.version {
-        uuidx_core::InspectableUuidVersion::V1 => {
-            Some("UUID v1 exposes timestamp and node metadata.")
-        }
-        uuidx_core::InspectableUuidVersion::V2 => {
-            Some("UUID v2 DCE Security semantics are outside RFC 9562.")
-        }
-        uuidx_core::InspectableUuidVersion::V3 => Some("UUID v3 uses legacy MD5 name hashing."),
-        uuidx_core::InspectableUuidVersion::V5 => Some("UUID v5 uses legacy SHA-1 name hashing."),
-        _ => None,
+fn append_warnings(output: &mut String, warnings: &[&str]) {
+    for message in warnings {
+        output.push_str(&format!("\n{} {}", warning("warning"), message));
     }
 }
 
@@ -201,7 +197,7 @@ mod tests {
 
     #[test]
     fn renderers_cover_warnings_and_command_specific_sections() {
-        let warning = vec!["application warning".to_owned()];
+        let warning = ["application warning"];
         let generated_output = generated(3, "value", "v8", &warning);
         assert!(generated_output.contains("#3"));
         assert!(generated_output.contains("application warning"));
@@ -234,7 +230,16 @@ mod tests {
         let inspected = inspect_uuid(&uuid);
         assert!(inspection(0, &uuid.to_string(), &inspected, false, true).contains("Bit layout"));
         assert!(!inspection(0, &uuid.to_string(), &inspected, false, false).contains("Bit layout"));
-        assert!(converted(1, "input", "output", UuidOutputFormat::Urn).contains("Converted UUID"));
+        assert!(
+            converted(
+                1,
+                "input",
+                "output",
+                UuidOutputFormat::Urn,
+                &["legacy warning"]
+            )
+            .contains("legacy warning")
+        );
         assert!(validated(2, "input", &IdentifierInspection::Uuid(inspected)).contains("[ok]"));
         let nanoid = uuidx_core::inspect_nanoid("V1StGXR8_Z5jdHi6B-myT").unwrap();
         assert!(validated(3, "input", &IdentifierInspection::Nanoid(nanoid)).contains("[ok]"));

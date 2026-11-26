@@ -342,6 +342,7 @@ fn public_format_and_type_contracts_are_stable() {
     assert_eq!(uuid.hyphenated(), "018f2c0b-6c5b-7d2e-8f4a-123456789abc");
     assert_eq!(uuid.simple(), "018f2c0b6c5b7d2e8f4a123456789abc");
     assert_eq!(uuid.urn(), "urn:uuid:018f2c0b-6c5b-7d2e-8f4a-123456789abc");
+    assert_eq!(uuid.braced(), "{018f2c0b-6c5b-7d2e-8f4a-123456789abc}");
     assert_eq!(uuid.to_string(), uuid.hyphenated());
 
     assert_eq!(
@@ -457,10 +458,10 @@ fn parser_and_format_enums_cover_aliases_and_errors() {
     assert!(GeneratableUuidVersion::from_str("v1").is_err());
     assert!(GeneratableUuidVersion::from_str("future").is_err());
 
-    assert_eq!(InspectableUuidVersion::V1.number(), Some(1));
-    assert_eq!(InspectableUuidVersion::Nil.number(), Some(0));
-    assert_eq!(InspectableUuidVersion::Max.number(), Some(15));
-    assert_eq!(InspectableUuidVersion::Unknown(9).number(), Some(9));
+    assert_eq!(InspectableUuidVersion::V1.number(), 1);
+    assert_eq!(InspectableUuidVersion::Nil.number(), 0);
+    assert_eq!(InspectableUuidVersion::Max.number(), 15);
+    assert_eq!(InspectableUuidVersion::Unknown(9).number(), 9);
     assert_eq!(InspectableUuidVersion::Unknown(9).to_string(), "unknown(9)");
 
     for (value, expected) in [
@@ -546,7 +547,7 @@ fn inspection_layouts_match_each_uuid_family() {
             | InspectableUuidVersion::V5
             | InspectableUuidVersion::V6
             | InspectableUuidVersion::V7
-            | InspectableUuidVersion::V8 => versioned_uuid(version.number().unwrap()),
+            | InspectableUuidVersion::V8 => versioned_uuid(version.number()),
             InspectableUuidVersion::Nil | InspectableUuidVersion::Max => unreachable!(),
         };
         let inspection = inspect_uuid(&uuid);
@@ -790,6 +791,7 @@ fn identifier_family_parses_aliases_and_displays_names() {
     );
     assert_eq!(IdentifierFamily::Uuid.to_string(), "uuid");
     assert_eq!(IdentifierFamily::Nanoid.to_string(), "nanoid");
+    assert_eq!(IdentifierFamily::Snowflake.to_string(), "snowflake");
     assert!(IdentifierFamily::from_str("objectid").is_err());
 
     #[cfg(feature = "ulid-inspect")]
@@ -901,4 +903,43 @@ fn inspection_kind_and_type_errors_cover_every_family() {
             Err(IdentifierTypeError::Ulid(_))
         ));
     }
+}
+
+#[test]
+fn v7_default_generation_is_strictly_monotonic_in_tight_batches() {
+    let options = GenerationOptions::new(GeneratableUuidVersion::V7);
+    let batch: Vec<Uuid> = (0..256)
+        .map(|_| generate_uuid(&options).expect("v7 generation should succeed"))
+        .collect();
+
+    for pair in batch.windows(2) {
+        assert!(
+            pair[0] < pair[1],
+            "expected monotonic v7 order, got {} >= {}",
+            pair[0],
+            pair[1]
+        );
+    }
+}
+
+#[test]
+fn parse_namespace_resolves_rfc_aliases_and_explicit_uuids() {
+    use uuidx_core::{ParseUuidError, parse_namespace};
+
+    for (alias, expected) in [
+        ("dns", Uuid::NAMESPACE_DNS),
+        (" DNS ", Uuid::NAMESPACE_DNS),
+        ("Url", Uuid::NAMESPACE_URL),
+        ("OID", Uuid::NAMESPACE_OID),
+        ("x500", Uuid::NAMESPACE_X500),
+        ("6ba7b810-9dad-11d1-80b4-00c04fd430c8", Uuid::NAMESPACE_DNS),
+    ] {
+        assert_eq!(parse_namespace(alias).unwrap(), expected);
+    }
+
+    assert_eq!(parse_namespace("   "), Err(ParseUuidError::Empty));
+    assert!(matches!(
+        parse_namespace("not-a-namespace"),
+        Err(ParseUuidError::Invalid(_))
+    ));
 }
